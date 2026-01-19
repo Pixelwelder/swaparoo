@@ -1,5 +1,5 @@
 import type { PlasmoCSConfig } from 'plasmo';
-import { getState, removeWord, addWord } from '../lib/storage';
+import { getState, removeWord, addWord, isDomainBlocked } from '../lib/storage';
 
 export const config: PlasmoCSConfig = {
   matches: ['<all_urls>'],
@@ -14,6 +14,11 @@ async function init() {
   enabled = state.enabled;
 
   if (!enabled) return;
+
+  const hostname = window.location.hostname;
+  if (isDomainBlocked(hostname, state.blockedDomains || [])) {
+    return;
+  }
 
   activePool = new Map();
   state.words.forEach(({ en, es }) => {

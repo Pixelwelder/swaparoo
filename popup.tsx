@@ -1,14 +1,34 @@
 import { useEffect, useState, useRef, useMemo } from 'react';
-import { getState, setState, addWord, removeWord, setApiKey, translateWord, type UserState, type SortOption } from './lib/storage';
+import {
+  getState,
+  setState,
+  addWord,
+  removeWord,
+  removeLearnedWord,
+  markAsLearned,
+  moveToLearning,
+  setApiKey,
+  addBlockedDomain,
+  removeBlockedDomain,
+  translateWord,
+  type UserState,
+  type SortOption,
+  type WordPair
+} from './lib/storage';
+
+type Tab = 'learning' | 'learned';
 
 function IndexPopup() {
   const [state, setLocalState] = useState<UserState | null>(null);
   const [loading, setLoading] = useState(true);
   const [newEn, setNewEn] = useState('');
   const [newEs, setNewEs] = useState('');
-  const [translating, setTranslating] = useState(false);
+  const [translatingEs, setTranslatingEs] = useState(false);
+  const [translatingEn, setTranslatingEn] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [apiKeyInput, setApiKeyInput] = useState('');
+  const [newBlockedDomain, setNewBlockedDomain] = useState('');
+  const [activeTab, setActiveTab] = useState<Tab>('learning');
   const debounceRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -16,7 +36,7 @@ function IndexPopup() {
   }, []);
 
   useEffect(() => {
-    if (!state?.deeplApiKey || !newEn.trim()) {
+    if (!state?.deeplApiKey || !newEn.trim() || newEs.trim()) {
       return;
     }
 
@@ -25,12 +45,12 @@ function IndexPopup() {
     }
 
     debounceRef.current = window.setTimeout(async () => {
-      setTranslating(true);
-      const result = await translateWord(newEn.trim(), state.deeplApiKey!);
+      setTranslatingEs(true);
+      const result = await translateWord(newEn.trim(), state.deeplApiKey!, 'en-to-es');
       if (result) {
         setNewEs(result);
       }
-      setTranslating(false);
+      setTranslatingEs(false);
     }, 500);
 
     return () => {
@@ -39,6 +59,31 @@ function IndexPopup() {
       }
     };
   }, [newEn, state?.deeplApiKey]);
+
+  useEffect(() => {
+    if (!state?.deeplApiKey || !newEs.trim() || newEn.trim()) {
+      return;
+    }
+
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current);
+    }
+
+    debounceRef.current = window.setTimeout(async () => {
+      setTranslatingEn(true);
+      const result = await translateWord(newEs.trim(), state.deeplApiKey!, 'es-to-en');
+      if (result) {
+        setNewEn(result);
+      }
+      setTranslatingEn(false);
+    }, 500);
+
+    return () => {
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current);
+      }
+    };
+  }, [newEs, state?.deeplApiKey]);
 
   async function loadState() {
     const s = await getState();
@@ -55,7 +100,19 @@ function IndexPopup() {
   async function handleSaveApiKey() {
     await setApiKey(apiKeyInput.trim());
     setLocalState(prev => prev ? { ...prev, deeplApiKey: apiKeyInput.trim() } : null);
-    setShowSettings(false);
+  }
+
+  async function handleAddBlockedDomain() {
+    if (newBlockedDomain.trim()) {
+      await addBlockedDomain(newBlockedDomain.trim());
+      setNewBlockedDomain('');
+      await loadState();
+    }
+  }
+
+  async function handleRemoveBlockedDomain(domain: string) {
+    await removeBlockedDomain(domain);
+    await loadState();
   }
 
   async function handleAdd() {
@@ -77,14 +134,46 @@ function IndexPopup() {
     }
   }
 
-  async function handleRemove(en: string) {
-    await removeWord(en);
+  async function handleRemove(en: string, isLearned: boolean) {
+    if (isLearned) {
+      await removeLearnedWord(en);
+    } else {
+      await removeWord(en);
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (tab?.id) {
+        chrome.tabs.sendMessage(tab.id, {
+          type: 'SWAPAROO_REMOVE_WORD',
+          word: en.toLowerCase()
+        });
+      }
+    }
+    await loadState();
+  }
+
+  async function handleMarkLearned(en: string) {
+    await markAsLearned(en);
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (tab?.id) {
       chrome.tabs.sendMessage(tab.id, {
         type: 'SWAPAROO_REMOVE_WORD',
         word: en.toLowerCase()
       });
+    }
+    await loadState();
+  }
+
+  async function handleMoveToLearning(en: string) {
+    await moveToLearning(en);
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (tab?.id) {
+      const word = (state?.learnedWords || []).find(w => w.en.toLowerCase() === en.toLowerCase());
+      if (word) {
+        chrome.tabs.sendMessage(tab.id, {
+          type: 'SWAPAROO_ADD_WORD_DIRECT',
+          word: en.toLowerCase(),
+          translation: word.es
+        });
+      }
     }
     await loadState();
   }
@@ -99,52 +188,6 @@ function IndexPopup() {
     await setState({ sortBy });
     setLocalState(prev => prev ? { ...prev, sortBy } : null);
   }
-
-  function handleColumnClick(column: 'en' | 'es' | 'added') {
-    const currentSort = state?.sortBy || 'added-desc';
-    const [currentCol, currentDir] = currentSort.split('-') as [string, string];
-
-    let newSort: SortOption;
-    if (currentCol === column) {
-      newSort = `${column}-${currentDir === 'asc' ? 'desc' : 'asc'}` as SortOption;
-    } else {
-      newSort = `${column}-asc` as SortOption;
-    }
-    handleSortChange(newSort);
-  }
-
-  function getDaysAgo(timestamp: number): string {
-    if (!timestamp) return '—';
-    const now = Date.now();
-    const days = Math.floor((now - timestamp) / (1000 * 60 * 60 * 24));
-    return `${days}d`;
-  }
-
-  function getSortIndicator(column: 'en' | 'es' | 'added'): string {
-    const currentSort = state?.sortBy || 'added-desc';
-    const [currentCol, currentDir] = currentSort.split('-');
-    if (currentCol !== column) return '';
-    return currentDir === 'asc' ? ' ▲' : ' ▼';
-  }
-
-  const sortedWords = useMemo(() => {
-    if (!state) return [];
-    const words = [...state.words];
-    const sortBy = state.sortBy || 'added-desc';
-    const [column, direction] = sortBy.split('-');
-    const mult = direction === 'asc' ? 1 : -1;
-
-    switch (column) {
-      case 'en':
-        return words.sort((a, b) => mult * a.en.localeCompare(b.en));
-      case 'es':
-        return words.sort((a, b) => mult * a.es.localeCompare(b.es));
-      case 'added':
-        return words.sort((a, b) => mult * ((a.addedAt || 0) - (b.addedAt || 0)));
-      default:
-        return words;
-    }
-  }, [state?.words, state?.sortBy]);
 
   if (loading || !state) {
     return <div style={styles.popup}>Loading...</div>;
@@ -203,94 +246,234 @@ function IndexPopup() {
           >
             Get free API key →
           </a>
-        </div>
-      )}
 
-      <div style={styles.addForm}>
-        <input
-          type="text"
-          placeholder="English"
-          value={newEn}
-          onChange={(e) => setNewEn(e.target.value)}
-          onKeyDown={handleKeyDown}
-          style={styles.formInput}
-        />
-        <input
-          type="text"
-          placeholder={translating ? 'Translating...' : 'Spanish'}
-          value={newEs}
-          onChange={(e) => setNewEs(e.target.value)}
-          onKeyDown={handleKeyDown}
-          style={{
-            ...styles.formInput,
-            ...(translating ? styles.inputTranslating : {})
-          }}
-        />
-        <button onClick={handleAdd} style={styles.addBtn}>+</button>
-      </div>
+          <div style={styles.settingsDivider} />
 
-      {!state.deeplApiKey && (
-        <div style={styles.hint}>
-          Add a DeepL API key in settings for auto-translation
-        </div>
-      )}
-
-      {state.words.length > 0 && (
-        <div style={styles.tableHeader}>
-          <span
-            style={styles.headerEn}
-            onClick={() => handleColumnClick('en')}
-          >
-            English{getSortIndicator('en')}
-          </span>
-          <span style={styles.headerArrow}></span>
-          <span
-            style={styles.headerEs}
-            onClick={() => handleColumnClick('es')}
-          >
-            Spanish{getSortIndicator('es')}
-          </span>
-          <span
-            style={styles.headerAdded}
-            onClick={() => handleColumnClick('added')}
-          >
-            Added{getSortIndicator('added')}
-          </span>
-          <span style={styles.headerAction}></span>
-        </div>
-      )}
-
-      <div style={styles.wordList}>
-        {sortedWords.length === 0 ? (
-          <div style={styles.empty}>No words yet. Add some above.</div>
-        ) : (
-          sortedWords.map(({ en, es, addedAt }) => (
-            <div key={en} style={styles.wordRow}>
-              <span style={styles.wordEn}>{en}</span>
-              <span style={styles.wordArrow}>→</span>
-              <span style={styles.wordEs}>{es}</span>
-              <span style={styles.wordAdded}>{getDaysAgo(addedAt)}</span>
-              <button
-                onClick={() => handleRemove(en)}
-                style={styles.removeBtn}
-              >
-                ×
-              </button>
+          <label style={styles.settingsLabel}>Blocked Domains</label>
+          <div style={styles.settingsRow}>
+            <input
+              type="text"
+              placeholder="example.com"
+              value={newBlockedDomain}
+              onChange={(e) => setNewBlockedDomain(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleAddBlockedDomain()}
+              style={styles.input}
+            />
+            <button onClick={handleAddBlockedDomain} style={styles.saveBtn}>Add</button>
+          </div>
+          {(state.blockedDomains || []).length > 0 && (
+            <div style={styles.blockedList}>
+              {(state.blockedDomains || []).map(domain => (
+                <div key={domain} style={styles.blockedItem}>
+                  <span style={styles.blockedDomain}>{domain}</span>
+                  <button
+                    onClick={() => handleRemoveBlockedDomain(domain)}
+                    style={styles.blockedRemoveBtn}
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
             </div>
-          ))
-        )}
+          )}
+        </div>
+      )}
+
+      <div style={styles.tabs}>
+        <button
+          style={{
+            ...styles.tab,
+            ...(activeTab === 'learning' ? styles.tabActive : {})
+          }}
+          onClick={() => setActiveTab('learning')}
+        >
+          Learning ({state.words.length})
+        </button>
+        <button
+          style={{
+            ...styles.tab,
+            ...(activeTab === 'learned' ? styles.tabActive : {})
+          }}
+          onClick={() => setActiveTab('learned')}
+        >
+          Learned ({(state.learnedWords || []).length})
+        </button>
       </div>
+
+      {activeTab === 'learning' && (
+        <>
+          <div style={styles.addForm}>
+            <input
+              type="text"
+              placeholder={translatingEn ? 'Translating...' : 'English'}
+              value={newEn}
+              onChange={(e) => setNewEn(e.target.value)}
+              onKeyDown={handleKeyDown}
+              style={{
+                ...styles.formInput,
+                ...(translatingEn ? styles.inputTranslating : {})
+              }}
+            />
+            <input
+              type="text"
+              placeholder={translatingEs ? 'Translating...' : 'Spanish'}
+              value={newEs}
+              onChange={(e) => setNewEs(e.target.value)}
+              onKeyDown={handleKeyDown}
+              style={{
+                ...styles.formInput,
+                ...(translatingEs ? styles.inputTranslating : {})
+              }}
+            />
+            <button onClick={handleAdd} style={styles.addBtn}>+</button>
+          </div>
+
+          {!state.deeplApiKey && (
+            <div style={styles.hint}>
+              Add a DeepL API key in settings for auto-translation
+            </div>
+          )}
+        </>
+      )}
+
+      <WordList
+        words={activeTab === 'learning' ? state.words : (state.learnedWords || [])}
+        sortBy={state.sortBy}
+        onSortChange={handleSortChange}
+        onRemove={(en) => handleRemove(en, activeTab === 'learned')}
+        onAction={activeTab === 'learning' ? handleMarkLearned : handleMoveToLearning}
+        actionIcon={activeTab === 'learning' ? '✓' : '←'}
+        actionTitle={activeTab === 'learning' ? 'Mark as learned' : 'Move to learning'}
+      />
 
       <div style={styles.footer}>
-        {state.words.length} word{state.words.length !== 1 ? 's' : ''}
+        {activeTab === 'learning'
+          ? `${state.words.length} word${state.words.length !== 1 ? 's' : ''} learning`
+          : `${(state.learnedWords || []).length} word${(state.learnedWords || []).length !== 1 ? 's' : ''} learned`
+        }
       </div>
     </div>
   );
 }
 
+interface WordListProps {
+  words: WordPair[];
+  sortBy?: SortOption;
+  onSortChange: (sortBy: SortOption) => void;
+  onRemove: (en: string) => void;
+  onAction: (en: string) => void;
+  actionIcon: string;
+  actionTitle: string;
+}
+
+function WordList({ words, sortBy, onSortChange, onRemove, onAction, actionIcon, actionTitle }: WordListProps) {
+  function handleColumnClick(column: 'en' | 'es' | 'added') {
+    const currentSort = sortBy || 'added-desc';
+    const [currentCol, currentDir] = currentSort.split('-') as [string, string];
+
+    let newSort: SortOption;
+    if (currentCol === column) {
+      newSort = `${column}-${currentDir === 'asc' ? 'desc' : 'asc'}` as SortOption;
+    } else {
+      newSort = `${column}-asc` as SortOption;
+    }
+    onSortChange(newSort);
+  }
+
+  function getDaysAgo(timestamp: number): string {
+    if (!timestamp) return '—';
+    const now = Date.now();
+    const days = Math.floor((now - timestamp) / (1000 * 60 * 60 * 24));
+    return `${days}d`;
+  }
+
+  function getSortIndicator(column: 'en' | 'es' | 'added'): string {
+    const currentSort = sortBy || 'added-desc';
+    const [currentCol, currentDir] = currentSort.split('-');
+    if (currentCol !== column) return '';
+    return currentDir === 'asc' ? ' ▲' : ' ▼';
+  }
+
+  const sortedWords = useMemo(() => {
+    const wordsCopy = [...words];
+    const currentSort = sortBy || 'added-desc';
+    const [column, direction] = currentSort.split('-');
+    const mult = direction === 'asc' ? 1 : -1;
+
+    switch (column) {
+      case 'en':
+        return wordsCopy.sort((a, b) => mult * a.en.localeCompare(b.en));
+      case 'es':
+        return wordsCopy.sort((a, b) => mult * a.es.localeCompare(b.es));
+      case 'added':
+        return wordsCopy.sort((a, b) => mult * ((a.addedAt || 0) - (b.addedAt || 0)));
+      default:
+        return wordsCopy;
+    }
+  }, [words, sortBy]);
+
+  if (words.length === 0) {
+    return <div style={styles.empty}>No words yet.</div>;
+  }
+
+  return (
+    <>
+      <div style={styles.tableHeader}>
+        <span
+          style={styles.headerEn}
+          onClick={() => handleColumnClick('en')}
+        >
+          English{getSortIndicator('en')}
+        </span>
+        <span style={styles.headerArrow}></span>
+        <span
+          style={styles.headerEs}
+          onClick={() => handleColumnClick('es')}
+        >
+          Spanish{getSortIndicator('es')}
+        </span>
+        <span
+          style={styles.headerAdded}
+          onClick={() => handleColumnClick('added')}
+        >
+          Added{getSortIndicator('added')}
+        </span>
+        <span style={styles.headerActions}></span>
+      </div>
+
+      <div style={styles.wordList}>
+        {sortedWords.map(({ en, es, addedAt }) => (
+          <div key={en} style={styles.wordRow}>
+            <span style={styles.wordEn}>{en}</span>
+            <span style={styles.wordArrow}>→</span>
+            <span style={styles.wordEs}>{es}</span>
+            <span style={styles.wordAdded}>{getDaysAgo(addedAt)}</span>
+            <div style={styles.wordActions}>
+              <button
+                onClick={() => onAction(en)}
+                style={styles.actionBtn}
+                title={actionTitle}
+              >
+                {actionIcon}
+              </button>
+              <button
+                onClick={() => onRemove(en)}
+                style={styles.removeBtn}
+                title="Delete"
+              >
+                ×
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </>
+  );
+}
+
 const styles: Record<string, React.CSSProperties> = {
   popup: {
-    width: 380,
+    width: 400,
     padding: 16,
     fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
     background: '#fff'
@@ -299,7 +482,7 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 12,
     paddingBottom: 12,
     borderBottom: '1px solid #e5e7eb'
   },
@@ -378,6 +561,38 @@ const styles: Record<string, React.CSSProperties> = {
     marginTop: 8,
     display: 'block'
   },
+  settingsDivider: {
+    height: 1,
+    background: '#e5e7eb',
+    margin: '12px 0'
+  },
+  blockedList: {
+    marginTop: 8,
+    display: 'flex',
+    flexWrap: 'wrap' as const,
+    gap: 6
+  },
+  blockedItem: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 4,
+    padding: '4px 8px',
+    background: '#fee2e2',
+    borderRadius: 4,
+    fontSize: 12
+  },
+  blockedDomain: {
+    color: '#991b1b'
+  },
+  blockedRemoveBtn: {
+    background: 'transparent',
+    border: 'none',
+    color: '#991b1b',
+    fontSize: 14,
+    cursor: 'pointer',
+    padding: 0,
+    lineHeight: 1
+  },
   saveBtn: {
     flexShrink: 0,
     padding: '8px 12px',
@@ -387,6 +602,27 @@ const styles: Record<string, React.CSSProperties> = {
     color: 'white',
     fontSize: 12,
     cursor: 'pointer'
+  },
+  tabs: {
+    display: 'flex',
+    gap: 4,
+    marginBottom: 12
+  },
+  tab: {
+    flex: 1,
+    padding: '8px 12px',
+    border: '1px solid #e5e7eb',
+    borderRadius: 6,
+    background: 'white',
+    fontSize: 13,
+    color: '#6b7280',
+    cursor: 'pointer'
+  },
+  tabActive: {
+    background: '#6366f1',
+    borderColor: '#6366f1',
+    color: 'white',
+    fontWeight: 500
   },
   addForm: {
     display: 'flex',
@@ -421,6 +657,16 @@ const styles: Record<string, React.CSSProperties> = {
     color: '#9ca3af',
     marginBottom: 12,
     textAlign: 'center'
+  },
+  addBtn: {
+    flexShrink: 0,
+    width: 36,
+    border: 'none',
+    borderRadius: 6,
+    background: '#6366f1',
+    color: 'white',
+    fontSize: 18,
+    cursor: 'pointer'
   },
   tableHeader: {
     display: 'flex',
@@ -464,26 +710,16 @@ const styles: Record<string, React.CSSProperties> = {
     userSelect: 'none' as const,
     textAlign: 'right' as const
   },
-  headerAction: {
-    width: 24
-  },
-  addBtn: {
-    flexShrink: 0,
-    width: 36,
-    border: 'none',
-    borderRadius: 6,
-    background: '#6366f1',
-    color: 'white',
-    fontSize: 18,
-    cursor: 'pointer'
+  headerActions: {
+    width: 52
   },
   wordList: {
-    maxHeight: 300,
+    maxHeight: 280,
     overflowY: 'auto',
     marginBottom: 12
   },
   empty: {
-    padding: 16,
+    padding: 24,
     textAlign: 'center',
     color: '#9ca3af',
     fontSize: 13
@@ -515,6 +751,23 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 12,
     color: '#9ca3af',
     textAlign: 'right' as const
+  },
+  wordActions: {
+    display: 'flex',
+    gap: 4
+  },
+  actionBtn: {
+    width: 24,
+    height: 24,
+    border: 'none',
+    borderRadius: 4,
+    background: '#ecfdf5',
+    color: '#10b981',
+    fontSize: 14,
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center'
   },
   removeBtn: {
     width: 24,

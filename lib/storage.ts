@@ -11,6 +11,8 @@ export type SortOption = 'en-asc' | 'en-desc' | 'es-asc' | 'es-desc' | 'added-as
 export interface UserState {
   enabled: boolean;
   words: WordPair[];
+  learnedWords: WordPair[];
+  blockedDomains: string[];
   deeplApiKey?: string;
   sortBy?: SortOption;
 }
@@ -30,7 +32,9 @@ const DEFAULT_WORDS: WordPair[] = [
 
 const DEFAULT_STATE: UserState = {
   enabled: true,
-  words: DEFAULT_WORDS
+  words: DEFAULT_WORDS,
+  learnedWords: [],
+  blockedDomains: []
 };
 
 const storage = new Storage({ area: 'sync' });
@@ -58,6 +62,35 @@ export async function removeWord(en: string): Promise<void> {
   await setState({
     words: state.words.filter(w => w.en.toLowerCase() !== en.toLowerCase())
   });
+}
+
+export async function removeLearnedWord(en: string): Promise<void> {
+  const state = await getState();
+  await setState({
+    learnedWords: (state.learnedWords || []).filter(w => w.en.toLowerCase() !== en.toLowerCase())
+  });
+}
+
+export async function markAsLearned(en: string): Promise<void> {
+  const state = await getState();
+  const word = state.words.find(w => w.en.toLowerCase() === en.toLowerCase());
+  if (word) {
+    await setState({
+      words: state.words.filter(w => w.en.toLowerCase() !== en.toLowerCase()),
+      learnedWords: [...(state.learnedWords || []), word]
+    });
+  }
+}
+
+export async function moveToLearning(en: string): Promise<void> {
+  const state = await getState();
+  const word = (state.learnedWords || []).find(w => w.en.toLowerCase() === en.toLowerCase());
+  if (word) {
+    await setState({
+      learnedWords: (state.learnedWords || []).filter(w => w.en.toLowerCase() !== en.toLowerCase()),
+      words: [...state.words, word]
+    });
+  }
 }
 
 export async function getApiKey(): Promise<string | undefined> {
@@ -95,6 +128,30 @@ export async function translateWord(
   } catch {
     return null;
   }
+}
+
+export async function addBlockedDomain(domain: string): Promise<void> {
+  const state = await getState();
+  const normalized = domain.toLowerCase().trim();
+  if (normalized && !(state.blockedDomains || []).includes(normalized)) {
+    await setState({
+      blockedDomains: [...(state.blockedDomains || []), normalized]
+    });
+  }
+}
+
+export async function removeBlockedDomain(domain: string): Promise<void> {
+  const state = await getState();
+  await setState({
+    blockedDomains: (state.blockedDomains || []).filter(d => d !== domain)
+  });
+}
+
+export function isDomainBlocked(hostname: string, blockedDomains: string[]): boolean {
+  const normalized = hostname.toLowerCase();
+  return (blockedDomains || []).some(blocked => {
+    return normalized === blocked || normalized.endsWith('.' + blocked);
+  });
 }
 
 export { storage };
