@@ -1,4 +1,5 @@
 import type { PlasmoCSConfig } from 'plasmo';
+import nlp from 'compromise';
 import { getState, removeWord, addWord, isDomainBlocked } from '../lib/storage';
 
 export const config: PlasmoCSConfig = {
@@ -276,6 +277,12 @@ function injectStyles() {
       font-weight: 600;
     }
 
+    .swaparoo-pos {
+      font-weight: 400;
+      font-size: 13px;
+      color: #6366f1;
+    }
+
     .swaparoo-modal-inputs {
       display: flex;
       align-items: center;
@@ -365,10 +372,77 @@ function injectStyles() {
   document.head.appendChild(style);
 }
 
+function detectPartOfSpeech(word: string, sentence: string | null): string | null {
+  if (!sentence) return null;
+
+  const doc = nlp(sentence);
+  const match = doc.match(word);
+
+  if (!match.found) return null;
+
+  // Get the term data
+  const terms = match.json()?.[0]?.terms;
+  if (!terms || terms.length === 0) return null;
+
+  const term = terms[0];
+  const tags = term.tags || [];
+
+  // Map compromise tags to simple abbreviations
+  if (tags.includes('Noun')) return 'n';
+  if (tags.includes('Verb')) return 'v';
+  if (tags.includes('Adjective')) return 'adj';
+  if (tags.includes('Adverb')) return 'adv';
+  if (tags.includes('Preposition')) return 'prep';
+  if (tags.includes('Conjunction')) return 'conj';
+  if (tags.includes('Pronoun')) return 'pron';
+
+  return null;
+}
+
+function extractSentenceContext(): string | null {
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0) return null;
+
+  const range = selection.getRangeAt(0);
+  const container = range.commonAncestorContainer;
+
+  // Get the text content of the parent element
+  const parentElement = container.nodeType === Node.TEXT_NODE
+    ? container.parentElement
+    : container as Element;
+
+  if (!parentElement) return null;
+
+  const fullText = parentElement.textContent || '';
+  const selectedText = selection.toString().trim();
+
+  // Find the sentence containing the selected word
+  // Split by sentence boundaries but keep the delimiters
+  const sentences = fullText.split(/(?<=[.!?])\s+/);
+
+  for (const sentence of sentences) {
+    if (sentence.toLowerCase().includes(selectedText.toLowerCase())) {
+      return sentence.trim();
+    }
+  }
+
+  // If no sentence boundary found, return surrounding text (up to 200 chars)
+  const selectionStart = fullText.toLowerCase().indexOf(selectedText.toLowerCase());
+  if (selectionStart !== -1) {
+    const start = Math.max(0, selectionStart - 100);
+    const end = Math.min(fullText.length, selectionStart + selectedText.length + 100);
+    return fullText.slice(start, end).trim();
+  }
+
+  return null;
+}
+
 // Listen for messages from background and popup
 chrome.runtime.onMessage.addListener((message) => {
   if (message.type === 'SWAPAROO_ADD_WORD') {
-    showAddWordModal(message.word);
+    const context = extractSentenceContext();
+    const pos = detectPartOfSpeech(message.word, context);
+    showAddWordModal(message.word, context, pos);
   } else if (message.type === 'SWAPAROO_ADD_WORD_DIRECT') {
     if (!activePool) {
       activePool = new Map();
@@ -382,15 +456,17 @@ chrome.runtime.onMessage.addListener((message) => {
   }
 });
 
-function showAddWordModal(selectedWord: string) {
+function showAddWordModal(selectedWord: string, sentenceContext?: string | null, partOfSpeech?: string | null) {
   let originalSlot: 'en' | 'es' = 'es';
   const originalWord = selectedWord.toLowerCase();
+  const context = sentenceContext || undefined;
+  const pos = partOfSpeech || null;
 
   const overlay = document.createElement('div');
   overlay.className = 'swaparoo-modal-overlay';
   overlay.innerHTML = `
     <div class="swaparoo-modal">
-      <h3>Add to Swaparoo</h3>
+      <h3>Add to Swaparoo${pos ? ` <span class="swaparoo-pos">(${pos})</span>` : ''}</h3>
       <div class="swaparoo-modal-inputs">
         <input type="text" class="swaparoo-input-en" placeholder="English" />
         <button class="swaparoo-swap-btn" title="Swap">↔</button>
@@ -426,7 +502,8 @@ function showAddWordModal(selectedWord: string) {
       const response = await chrome.runtime.sendMessage({
         type: 'SWAPAROO_TRANSLATE',
         word: originalWord,
-        direction: 'es-to-en'
+        direction: 'es-to-en',
+        context
       });
       enInput.value = response?.translation || '';
       enInput.placeholder = 'English';
@@ -438,7 +515,8 @@ function showAddWordModal(selectedWord: string) {
       const response = await chrome.runtime.sendMessage({
         type: 'SWAPAROO_TRANSLATE',
         word: originalWord,
-        direction: 'en-to-es'
+        direction: 'en-to-es',
+        context
       });
       esInput.value = response?.translation || '';
       esInput.placeholder = 'Spanish';

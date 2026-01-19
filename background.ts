@@ -37,7 +37,8 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       const translation = await translateWord(
         message.word,
         state.deeplApiKey,
-        message.direction
+        message.direction,
+        message.context
       );
       sendResponse({ translation });
     })();

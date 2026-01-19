@@ -105,20 +105,27 @@ export async function setApiKey(key: string): Promise<void> {
 export async function translateWord(
   word: string,
   apiKey: string,
-  direction: 'en-to-es' | 'es-to-en' = 'en-to-es'
+  direction: 'en-to-es' | 'es-to-en' = 'en-to-es',
+  context?: string
 ): Promise<string | null> {
   try {
+    const body: Record<string, unknown> = {
+      text: [word],
+      source_lang: direction === 'en-to-es' ? 'EN' : 'ES',
+      target_lang: direction === 'en-to-es' ? 'ES' : 'EN'
+    };
+
+    if (context) {
+      body.context = context;
+    }
+
     const response = await fetch('https://api-free.deepl.com/v2/translate', {
       method: 'POST',
       headers: {
         'Authorization': `DeepL-Auth-Key ${apiKey}`,
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({
-        text: [word],
-        source_lang: direction === 'en-to-es' ? 'EN' : 'ES',
-        target_lang: direction === 'en-to-es' ? 'ES' : 'EN'
-      })
+      body: JSON.stringify(body)
     });
 
     if (!response.ok) return null;
