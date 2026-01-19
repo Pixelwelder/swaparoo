@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useMemo } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import nlp from 'compromise';
 import {
   getState,
@@ -11,7 +11,7 @@ import {
   setApiKey,
   addBlockedDomain,
   removeBlockedDomain,
-  translateWord,
+  translateWithSentence,
   type UserState,
   type SortOption,
   type WordPair
@@ -22,70 +22,15 @@ type Tab = 'learning' | 'learned';
 function IndexPopup() {
   const [state, setLocalState] = useState<UserState | null>(null);
   const [loading, setLoading] = useState(true);
-  const [newEn, setNewEn] = useState('');
-  const [newEs, setNewEs] = useState('');
-  const [newPos, setNewPos] = useState('');
-  const [translatingEs, setTranslatingEs] = useState(false);
-  const [translatingEn, setTranslatingEn] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showAddModal, setShowAddModal] = useState(false);
   const [apiKeyInput, setApiKeyInput] = useState('');
   const [newBlockedDomain, setNewBlockedDomain] = useState('');
   const [activeTab, setActiveTab] = useState<Tab>('learning');
-  const debounceRef = useRef<number | null>(null);
 
   useEffect(() => {
     loadState();
   }, []);
-
-  useEffect(() => {
-    if (!state?.deeplApiKey || !newEn.trim() || newEs.trim()) {
-      return;
-    }
-
-    if (debounceRef.current) {
-      clearTimeout(debounceRef.current);
-    }
-
-    debounceRef.current = window.setTimeout(async () => {
-      setTranslatingEs(true);
-      const result = await translateWord(newEn.trim(), state.deeplApiKey!, 'en-to-es');
-      if (result) {
-        setNewEs(result);
-      }
-      setTranslatingEs(false);
-    }, 500);
-
-    return () => {
-      if (debounceRef.current) {
-        clearTimeout(debounceRef.current);
-      }
-    };
-  }, [newEn, state?.deeplApiKey]);
-
-  useEffect(() => {
-    if (!state?.deeplApiKey || !newEs.trim() || newEn.trim()) {
-      return;
-    }
-
-    if (debounceRef.current) {
-      clearTimeout(debounceRef.current);
-    }
-
-    debounceRef.current = window.setTimeout(async () => {
-      setTranslatingEn(true);
-      const result = await translateWord(newEs.trim(), state.deeplApiKey!, 'es-to-en');
-      if (result) {
-        setNewEn(result);
-      }
-      setTranslatingEn(false);
-    }, 500);
-
-    return () => {
-      if (debounceRef.current) {
-        clearTimeout(debounceRef.current);
-      }
-    };
-  }, [newEs, state?.deeplApiKey]);
 
   async function loadState() {
     const s = await getState();
@@ -124,46 +69,18 @@ function IndexPopup() {
     await loadState();
   }
 
-  function detectPartOfSpeech(word: string): string {
-    const doc = nlp(word);
-    const terms = doc.terms().json();
-    if (terms.length > 0 && terms[0].terms?.length > 0) {
-      const tags = terms[0].terms[0].tags || [];
-      if (tags.includes('Noun')) return 'noun';
-      if (tags.includes('Verb')) return 'verb';
-      if (tags.includes('Adjective')) return 'adj';
-      if (tags.includes('Adverb')) return 'adv';
+  async function handleAddWord(en: string, es: string, pos?: string, sentenceEn?: string, sentenceEs?: string) {
+    await addWord(en, es, pos, sentenceEn, sentenceEs);
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (tab?.id) {
+      chrome.tabs.sendMessage(tab.id, {
+        type: 'SWAPAROO_ADD_WORD_DIRECT',
+        word: en,
+        translation: es
+      });
     }
-    return '';
-  }
-
-  useEffect(() => {
-    if (newEn.trim()) {
-      const detected = detectPartOfSpeech(newEn.trim());
-      setNewPos(detected);
-    } else {
-      setNewPos('');
-    }
-  }, [newEn]);
-
-  async function handleAdd() {
-    if (newEn.trim() && newEs.trim()) {
-      const en = newEn.trim().toLowerCase();
-      const es = newEs.trim();
-      await addWord(en, es, newPos || undefined);
-      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-      if (tab?.id) {
-        chrome.tabs.sendMessage(tab.id, {
-          type: 'SWAPAROO_ADD_WORD_DIRECT',
-          word: en,
-          translation: es
-        });
-      }
-      setNewEn('');
-      setNewEs('');
-      setNewPos('');
-      await loadState();
-    }
+    await loadState();
+    setShowAddModal(false);
   }
 
   async function handleRemove(en: string, isLearned: boolean) {
@@ -208,12 +125,6 @@ function IndexPopup() {
       }
     }
     await loadState();
-  }
-
-  async function handleKeyDown(e: React.KeyboardEvent) {
-    if (e.key === 'Enter') {
-      handleAdd();
-    }
   }
 
   async function handleSortChange(sortBy: SortOption) {
@@ -333,50 +244,20 @@ function IndexPopup() {
       </div>
 
       {activeTab === 'learning' && (
-        <>
-          <div style={styles.addForm}>
-            <input
-              type="text"
-              placeholder={translatingEn ? 'Translating...' : 'English'}
-              value={newEn}
-              onChange={(e) => setNewEn(e.target.value)}
-              onKeyDown={handleKeyDown}
-              style={{
-                ...styles.formInput,
-                ...(translatingEn ? styles.inputTranslating : {})
-              }}
-            />
-            <input
-              type="text"
-              placeholder={translatingEs ? 'Translating...' : 'Spanish'}
-              value={newEs}
-              onChange={(e) => setNewEs(e.target.value)}
-              onKeyDown={handleKeyDown}
-              style={{
-                ...styles.formInput,
-                ...(translatingEs ? styles.inputTranslating : {})
-              }}
-            />
-            <select
-              value={newPos}
-              onChange={(e) => setNewPos(e.target.value)}
-              style={styles.posSelect}
-            >
-              <option value="">—</option>
-              <option value="noun">noun</option>
-              <option value="verb">verb</option>
-              <option value="adj">adj</option>
-              <option value="adv">adv</option>
-            </select>
-            <button onClick={handleAdd} style={styles.addBtn}>+</button>
-          </div>
+        <button
+          onClick={() => setShowAddModal(true)}
+          style={styles.newWordBtn}
+        >
+          + New Word
+        </button>
+      )}
 
-          {!state.deeplApiKey && (
-            <div style={styles.hint}>
-              Add a DeepL API key in settings for auto-translation
-            </div>
-          )}
-        </>
+      {showAddModal && (
+        <AddWordModal
+          apiKey={state.deeplApiKey}
+          onAdd={handleAddWord}
+          onClose={() => setShowAddModal(false)}
+        />
       )}
 
       <WordList
@@ -545,6 +426,366 @@ function WordList({ words, sortBy, onSortChange, onRemove, onAction, actionIcon,
   );
 }
 
+interface AddWordModalProps {
+  apiKey?: string;
+  onAdd: (en: string, es: string, pos?: string, sentenceEn?: string, sentenceEs?: string) => void;
+  onClose: () => void;
+}
+
+function AddWordModal({ apiKey, onAdd, onClose }: AddWordModalProps) {
+  const [direction, setDirection] = useState<'en-to-es' | 'es-to-en'>('en-to-es');
+  const [sourceWord, setSourceWord] = useState('');
+  const [sourceSentence, setSourceSentence] = useState('');
+  const [targetWord, setTargetWord] = useState('');
+  const [targetSentence, setTargetSentence] = useState('');
+  const [pos, setPos] = useState('');
+  const [translating, setTranslating] = useState(false);
+
+  function detectPartOfSpeech(word: string): string {
+    const doc = nlp(word);
+    const terms = doc.terms().json();
+    if (terms.length > 0 && terms[0].terms?.length > 0) {
+      const tags = terms[0].terms[0].tags || [];
+      if (tags.includes('Noun')) return 'noun';
+      if (tags.includes('Verb')) return 'verb';
+      if (tags.includes('Adjective')) return 'adj';
+      if (tags.includes('Adverb')) return 'adv';
+    }
+    return '';
+  }
+
+  async function handleTranslate() {
+    if (!apiKey || !sourceWord.trim()) return;
+
+    setTranslating(true);
+    const detected = detectPartOfSpeech(sourceWord.trim());
+    if (detected) setPos(detected);
+
+    if (sourceSentence.trim()) {
+      const result = await translateWithSentence(
+        sourceWord.trim(),
+        sourceSentence.trim(),
+        apiKey,
+        direction
+      );
+      setTargetWord(result.word || '');
+      setTargetSentence(result.sentence || '');
+    } else {
+      const result = await translateWithSentence(
+        sourceWord.trim(),
+        sourceWord.trim(),
+        apiKey,
+        direction
+      );
+      setTargetWord(result.word || '');
+    }
+    setTranslating(false);
+  }
+
+  function handleSwap() {
+    setDirection(prev => prev === 'en-to-es' ? 'es-to-en' : 'en-to-es');
+    setSourceWord('');
+    setSourceSentence('');
+    setTargetWord('');
+    setTargetSentence('');
+    setPos('');
+  }
+
+  function handleAdd() {
+    const en = direction === 'en-to-es' ? sourceWord.trim().toLowerCase() : targetWord.trim().toLowerCase();
+    const es = direction === 'en-to-es' ? targetWord.trim().toLowerCase() : sourceWord.trim().toLowerCase();
+    const sentenceEn = direction === 'en-to-es' ? sourceSentence.trim() : targetSentence.trim();
+    const sentenceEs = direction === 'en-to-es' ? targetSentence.trim() : sourceSentence.trim();
+
+    if (en && es) {
+      onAdd(en, es, pos || undefined, sentenceEn || undefined, sentenceEs || undefined);
+    }
+  }
+
+  const canAdd = sourceWord.trim() && targetWord.trim();
+  const sourceLabel = direction === 'en-to-es' ? 'English' : 'Spanish';
+  const targetLabel = direction === 'en-to-es' ? 'Spanish' : 'English';
+
+  return (
+    <div style={modalStyles.overlay} onClick={onClose}>
+      <div style={modalStyles.modal} onClick={e => e.stopPropagation()}>
+        <h3 style={modalStyles.title}>Add New Word</h3>
+
+        <div style={modalStyles.directionRow}>
+          <span style={modalStyles.directionLabel}>Translating from:</span>
+          <button
+            style={{
+              ...modalStyles.directionBtn,
+              ...(direction === 'en-to-es' ? modalStyles.directionBtnActive : {})
+            }}
+            onClick={() => direction !== 'en-to-es' && handleSwap()}
+          >
+            English
+          </button>
+          <button
+            style={{
+              ...modalStyles.directionBtn,
+              ...(direction === 'es-to-en' ? modalStyles.directionBtnActive : {})
+            }}
+            onClick={() => direction !== 'es-to-en' && handleSwap()}
+          >
+            Spanish
+          </button>
+        </div>
+
+        <div style={modalStyles.columns}>
+          <div style={modalStyles.column}>
+            <label style={modalStyles.label}>{sourceLabel} (editable)</label>
+            <input
+              type="text"
+              placeholder="Word"
+              value={sourceWord}
+              onChange={e => setSourceWord(e.target.value)}
+              style={modalStyles.input}
+            />
+            <textarea
+              placeholder="Sentence (optional)"
+              value={sourceSentence}
+              onChange={e => setSourceSentence(e.target.value)}
+              style={modalStyles.textarea}
+              rows={2}
+            />
+          </div>
+
+          <div style={modalStyles.arrow}>→</div>
+
+          <div style={modalStyles.column}>
+            <label style={modalStyles.label}>{targetLabel} (translated)</label>
+            <input
+              type="text"
+              placeholder={translating ? 'Translating...' : 'Word'}
+              value={targetWord}
+              readOnly
+              style={{ ...modalStyles.input, ...modalStyles.inputReadOnly }}
+            />
+            <textarea
+              placeholder={translating ? 'Translating...' : 'Sentence'}
+              value={targetSentence}
+              readOnly
+              style={{ ...modalStyles.textarea, ...modalStyles.inputReadOnly }}
+              rows={2}
+            />
+          </div>
+        </div>
+
+        <div style={modalStyles.posRow}>
+          <span style={modalStyles.posLabel}>Part of speech:</span>
+          <select
+            value={pos}
+            onChange={e => setPos(e.target.value)}
+            style={modalStyles.posSelect}
+          >
+            <option value="">—</option>
+            <option value="noun">noun</option>
+            <option value="verb">verb</option>
+            <option value="adj">adjective</option>
+            <option value="adv">adverb</option>
+          </select>
+        </div>
+
+        <div style={modalStyles.buttons}>
+          <button onClick={onClose} style={modalStyles.cancelBtn}>Cancel</button>
+          <button
+            onClick={handleTranslate}
+            disabled={!apiKey || !sourceWord.trim() || translating}
+            style={modalStyles.translateBtn}
+          >
+            {translating ? 'Translating...' : 'Translate'}
+          </button>
+          <button
+            onClick={handleAdd}
+            disabled={!canAdd}
+            style={{
+              ...modalStyles.addBtn,
+              ...(canAdd ? {} : modalStyles.addBtnDisabled)
+            }}
+          >
+            Add
+          </button>
+        </div>
+
+        {!apiKey && (
+          <div style={modalStyles.hint}>
+            Add a DeepL API key in settings for auto-translation
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+const modalStyles: Record<string, React.CSSProperties> = {
+  overlay: {
+    position: 'fixed',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    background: 'rgba(0, 0, 0, 0.5)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 1000
+  },
+  modal: {
+    background: 'white',
+    borderRadius: 8,
+    padding: 20,
+    width: 380,
+    maxHeight: '90vh',
+    overflow: 'auto'
+  },
+  title: {
+    margin: '0 0 16px 0',
+    fontSize: 16,
+    fontWeight: 600,
+    color: '#1f2937',
+    textAlign: 'center'
+  },
+  directionRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 16
+  },
+  directionLabel: {
+    fontSize: 12,
+    color: '#6b7280'
+  },
+  directionBtn: {
+    padding: '4px 12px',
+    border: '1px solid #e5e7eb',
+    borderRadius: 4,
+    background: 'white',
+    fontSize: 12,
+    cursor: 'pointer',
+    color: '#6b7280'
+  },
+  directionBtnActive: {
+    background: '#6366f1',
+    borderColor: '#6366f1',
+    color: 'white'
+  },
+  columns: {
+    display: 'flex',
+    gap: 12,
+    alignItems: 'flex-start',
+    marginBottom: 16
+  },
+  column: {
+    flex: 1
+  },
+  arrow: {
+    paddingTop: 28,
+    color: '#9ca3af',
+    fontSize: 16
+  },
+  label: {
+    display: 'block',
+    fontSize: 11,
+    fontWeight: 500,
+    color: '#6b7280',
+    marginBottom: 4,
+    textTransform: 'uppercase' as const,
+    letterSpacing: '0.5px'
+  },
+  input: {
+    width: '100%',
+    padding: '8px 10px',
+    border: '1px solid #e5e7eb',
+    borderRadius: 6,
+    fontSize: 13,
+    marginBottom: 8,
+    boxSizing: 'border-box' as const,
+    outline: 'none'
+  },
+  textarea: {
+    width: '100%',
+    padding: '8px 10px',
+    border: '1px solid #e5e7eb',
+    borderRadius: 6,
+    fontSize: 12,
+    resize: 'none' as const,
+    fontFamily: 'inherit',
+    boxSizing: 'border-box' as const,
+    outline: 'none'
+  },
+  inputReadOnly: {
+    background: '#f9fafb',
+    color: '#6b7280'
+  },
+  posRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 16
+  },
+  posLabel: {
+    fontSize: 12,
+    color: '#6b7280'
+  },
+  posSelect: {
+    padding: '4px 8px',
+    border: '1px solid #e5e7eb',
+    borderRadius: 4,
+    fontSize: 12,
+    color: '#374151',
+    background: 'white',
+    cursor: 'pointer',
+    outline: 'none'
+  },
+  buttons: {
+    display: 'flex',
+    gap: 8,
+    justifyContent: 'flex-end'
+  },
+  cancelBtn: {
+    padding: '8px 16px',
+    border: 'none',
+    borderRadius: 6,
+    background: '#f3f4f6',
+    color: '#374151',
+    fontSize: 13,
+    fontWeight: 500,
+    cursor: 'pointer'
+  },
+  translateBtn: {
+    padding: '8px 16px',
+    border: '1px solid #6366f1',
+    borderRadius: 6,
+    background: 'white',
+    color: '#6366f1',
+    fontSize: 13,
+    fontWeight: 500,
+    cursor: 'pointer'
+  },
+  addBtn: {
+    padding: '8px 16px',
+    border: 'none',
+    borderRadius: 6,
+    background: '#6366f1',
+    color: 'white',
+    fontSize: 13,
+    fontWeight: 500,
+    cursor: 'pointer'
+  },
+  addBtnDisabled: {
+    background: '#a5b4fc',
+    cursor: 'not-allowed'
+  },
+  hint: {
+    marginTop: 12,
+    fontSize: 11,
+    color: '#9ca3af',
+    textAlign: 'center'
+  }
+};
+
 const styles: Record<string, React.CSSProperties> = {
   popup: {
     width: 400,
@@ -698,20 +939,16 @@ const styles: Record<string, React.CSSProperties> = {
     color: 'white',
     fontWeight: 500
   },
-  addForm: {
-    display: 'flex',
-    gap: 8,
-    marginBottom: 8
-  },
-  formInput: {
-    flex: 1,
-    minWidth: 0,
-    padding: '8px 10px',
-    border: '1px solid #e5e7eb',
+  newWordBtn: {
+    width: '100%',
+    padding: '10px 16px',
+    border: '1px dashed #d1d5db',
     borderRadius: 6,
+    background: 'white',
+    color: '#6b7280',
     fontSize: 13,
-    outline: 'none',
-    boxSizing: 'border-box' as const
+    cursor: 'pointer',
+    marginBottom: 12
   },
   input: {
     flex: 1,
@@ -722,37 +959,6 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 13,
     outline: 'none',
     boxSizing: 'border-box' as const
-  },
-  inputTranslating: {
-    color: '#9ca3af'
-  },
-  hint: {
-    fontSize: 11,
-    color: '#9ca3af',
-    marginBottom: 12,
-    textAlign: 'center'
-  },
-  posSelect: {
-    flexShrink: 0,
-    width: 60,
-    padding: '8px 4px',
-    border: '1px solid #e5e7eb',
-    borderRadius: 6,
-    fontSize: 11,
-    color: '#6b7280',
-    background: 'white',
-    cursor: 'pointer',
-    outline: 'none'
-  },
-  addBtn: {
-    flexShrink: 0,
-    width: 36,
-    border: 'none',
-    borderRadius: 6,
-    background: '#6366f1',
-    color: 'white',
-    fontSize: 18,
-    cursor: 'pointer'
   },
   tableHeader: {
     display: 'flex',
