@@ -538,8 +538,11 @@ function detectPageLanguage(): 'en' | 'es' {
 function showAddWordModal(selectedWord: string, sentenceContext?: string | null, partOfSpeech?: string | null) {
   let originalSlot: 'en' | 'es' = detectPageLanguage();
   const originalWord = selectedWord.toLowerCase();
-  const context = sentenceContext || undefined;
+  const originalSentence = sentenceContext || null;
   const pos = partOfSpeech || null;
+
+  let sentenceEn: string | null = null;
+  let sentenceEs: string | null = null;
 
   const overlay = document.createElement('div');
   overlay.className = 'swaparoo-modal-overlay';
@@ -605,31 +608,56 @@ function showAddWordModal(selectedWord: string, sentenceContext?: string | null,
   }
 
   async function runTranslation() {
+    // Reset sentences based on original slot
     if (originalSlot === 'es') {
+      sentenceEs = originalSentence;
+      sentenceEn = null;
       esInput.value = originalWord;
       enInput.value = '';
       enInput.placeholder = 'Translating...';
 
-      const response = await chrome.runtime.sendMessage({
-        type: 'SWAPAROO_TRANSLATE',
-        word: originalWord,
-        direction: 'es-to-en',
-        context
-      });
-      enInput.value = response?.translation || '';
+      if (originalSentence) {
+        const response = await chrome.runtime.sendMessage({
+          type: 'SWAPAROO_TRANSLATE_WITH_SENTENCE',
+          word: originalWord,
+          sentence: originalSentence,
+          direction: 'es-to-en'
+        });
+        enInput.value = response?.word || '';
+        sentenceEn = response?.sentence || null;
+      } else {
+        const response = await chrome.runtime.sendMessage({
+          type: 'SWAPAROO_TRANSLATE',
+          word: originalWord,
+          direction: 'es-to-en'
+        });
+        enInput.value = response?.translation || '';
+      }
       enInput.placeholder = '';
     } else {
+      sentenceEn = originalSentence;
+      sentenceEs = null;
       enInput.value = originalWord;
       esInput.value = '';
       esInput.placeholder = 'Translating...';
 
-      const response = await chrome.runtime.sendMessage({
-        type: 'SWAPAROO_TRANSLATE',
-        word: originalWord,
-        direction: 'en-to-es',
-        context
-      });
-      esInput.value = response?.translation || '';
+      if (originalSentence) {
+        const response = await chrome.runtime.sendMessage({
+          type: 'SWAPAROO_TRANSLATE_WITH_SENTENCE',
+          word: originalWord,
+          sentence: originalSentence,
+          direction: 'en-to-es'
+        });
+        esInput.value = response?.word || '';
+        sentenceEs = response?.sentence || null;
+      } else {
+        const response = await chrome.runtime.sendMessage({
+          type: 'SWAPAROO_TRANSLATE',
+          word: originalWord,
+          direction: 'en-to-es'
+        });
+        esInput.value = response?.translation || '';
+      }
       esInput.placeholder = '';
     }
 
@@ -647,7 +675,7 @@ function showAddWordModal(selectedWord: string, sentenceContext?: string | null,
     const selectedPos = posSelect.value || undefined;
 
     if (en && es) {
-      await addWord(en, es, selectedPos);
+      await addWord(en, es, selectedPos, sentenceEn || undefined, sentenceEs || undefined);
       if (!activePool) {
         activePool = new Map();
         injectStyles();

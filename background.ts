@@ -1,4 +1,4 @@
-import { getState, translateWord } from './lib/storage';
+import { getState, translateWord, translateWithSentence } from './lib/storage';
 
 export {};
 
@@ -42,6 +42,24 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       );
       sendResponse({ translation });
     })();
-    return true; // Keep channel open for async response
+    return true;
+  }
+
+  if (message.type === 'SWAPAROO_TRANSLATE_WITH_SENTENCE') {
+    (async () => {
+      const state = await getState();
+      if (!state.deeplApiKey) {
+        sendResponse({ word: null, sentence: null });
+        return;
+      }
+      const result = await translateWithSentence(
+        message.word,
+        message.sentence,
+        state.deeplApiKey,
+        message.direction
+      );
+      sendResponse(result);
+    })();
+    return true;
   }
 });

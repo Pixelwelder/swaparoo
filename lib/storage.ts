@@ -5,6 +5,8 @@ export interface WordPair {
   es: string;
   addedAt: number;
   pos?: string;
+  sentenceEn?: string;
+  sentenceEs?: string;
 }
 
 export type SortOption = 'en-asc' | 'en-desc' | 'es-asc' | 'es-desc' | 'added-asc' | 'added-desc';
@@ -50,11 +52,19 @@ export async function setState(partial: Partial<UserState>): Promise<void> {
   await storage.set('userState', { ...current, ...partial });
 }
 
-export async function addWord(en: string, es: string, pos?: string): Promise<void> {
+export async function addWord(
+  en: string,
+  es: string,
+  pos?: string,
+  sentenceEn?: string,
+  sentenceEs?: string
+): Promise<void> {
   const state = await getState();
   const exists = state.words.some(w => w.en.toLowerCase() === en.toLowerCase());
   if (!exists) {
-    await setState({ words: [...state.words, { en, es, addedAt: Date.now(), pos }] });
+    await setState({
+      words: [...state.words, { en, es, addedAt: Date.now(), pos, sentenceEn, sentenceEs }]
+    });
   }
 }
 
@@ -135,6 +145,47 @@ export async function translateWord(
     return data.translations?.[0]?.text?.toLowerCase() || null;
   } catch {
     return null;
+  }
+}
+
+export interface TranslationResult {
+  word: string | null;
+  sentence: string | null;
+}
+
+export async function translateWithSentence(
+  word: string,
+  sentence: string,
+  apiKey: string,
+  direction: 'en-to-es' | 'es-to-en' = 'en-to-es'
+): Promise<TranslationResult> {
+  try {
+    const body: Record<string, unknown> = {
+      text: [word, sentence],
+      context: sentence,
+      source_lang: direction === 'en-to-es' ? 'EN' : 'ES',
+      target_lang: direction === 'en-to-es' ? 'ES' : 'EN'
+    };
+
+    const response = await fetch('https://api-free.deepl.com/v2/translate', {
+      method: 'POST',
+      headers: {
+        'Authorization': `DeepL-Auth-Key ${apiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(body)
+    });
+
+    if (!response.ok) return { word: null, sentence: null };
+
+    const data = await response.json();
+    const translations = data.translations || [];
+    return {
+      word: translations[0]?.text?.toLowerCase() || null,
+      sentence: translations[1]?.text || null
+    };
+  } catch {
+    return { word: null, sentence: null };
   }
 }
 

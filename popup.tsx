@@ -410,6 +410,12 @@ interface WordListProps {
 }
 
 function WordList({ words, sortBy, onSortChange, onRemove, onAction, actionIcon, actionTitle }: WordListProps) {
+  const [expandedWord, setExpandedWord] = useState<string | null>(null);
+
+  function toggleExpand(en: string) {
+    setExpandedWord(prev => prev === en ? null : en);
+  }
+
   function handleColumnClick(column: 'en' | 'es' | 'added') {
     const currentSort = sortBy || 'added-desc';
     const [currentCol, currentDir] = currentSort.split('-') as [string, string];
@@ -462,6 +468,7 @@ function WordList({ words, sortBy, onSortChange, onRemove, onAction, actionIcon,
   return (
     <>
       <div style={styles.tableHeader}>
+        <span style={styles.headerCaret}></span>
         <span
           style={styles.headerEn}
           onClick={() => handleColumnClick('en')}
@@ -485,30 +492,54 @@ function WordList({ words, sortBy, onSortChange, onRemove, onAction, actionIcon,
       </div>
 
       <div style={styles.wordList}>
-        {sortedWords.map(({ en, es, addedAt, pos }) => (
-          <div key={en} style={styles.wordRow}>
-            <span style={styles.wordEn}>{en}{pos && <span style={styles.wordPos}> {pos === 'noun' ? 'N' : pos === 'verb' ? 'V' : pos === 'adj' ? 'Adj' : pos === 'adv' ? 'Adv' : pos.toUpperCase()}</span>}</span>
-            <span style={styles.wordArrow}>→</span>
-            <span style={styles.wordEs}>{es}</span>
-            <span style={styles.wordAdded}>{getDaysAgo(addedAt)}</span>
-            <div style={styles.wordActions}>
-              <button
-                onClick={() => onAction(en)}
-                style={styles.actionBtn}
-                title={actionTitle}
-              >
-                {actionIcon}
-              </button>
-              <button
-                onClick={() => onRemove(en)}
-                style={styles.removeBtn}
-                title="Delete"
-              >
-                ×
-              </button>
+        {sortedWords.map(({ en, es, addedAt, pos, sentenceEn, sentenceEs }) => {
+          const isExpanded = expandedWord === en;
+          const hasSentences = sentenceEn || sentenceEs;
+          return (
+            <div key={en} style={styles.wordItem}>
+              <div style={styles.wordRow}>
+                <button
+                  onClick={() => hasSentences && toggleExpand(en)}
+                  style={{
+                    ...styles.caretBtn,
+                    opacity: hasSentences ? 1 : 0.3,
+                    cursor: hasSentences ? 'pointer' : 'default'
+                  }}
+                >
+                  {isExpanded ? '▼' : '▶'}
+                </button>
+                <span style={styles.wordEn}>{en}{pos && <span style={styles.wordPos}> {pos === 'noun' ? 'N' : pos === 'verb' ? 'V' : pos === 'adj' ? 'Adj' : pos === 'adv' ? 'Adv' : pos.toUpperCase()}</span>}</span>
+                <span style={styles.wordArrow}>→</span>
+                <span style={styles.wordEs}>{es}</span>
+                <span style={styles.wordAdded}>{getDaysAgo(addedAt)}</span>
+                <div style={styles.wordActions}>
+                  <button
+                    onClick={() => onAction(en)}
+                    style={styles.actionBtn}
+                    title={actionTitle}
+                  >
+                    {actionIcon}
+                  </button>
+                  <button
+                    onClick={() => onRemove(en)}
+                    style={styles.removeBtn}
+                    title="Delete"
+                  >
+                    ×
+                  </button>
+                </div>
+              </div>
+              {isExpanded && (
+                <div style={styles.expandedContent}>
+                  <div style={styles.sentenceRow}>
+                    <span style={styles.sentenceEn}>{sentenceEn || '—'}</span>
+                    <span style={styles.sentenceEs}>{sentenceEs || '—'}</span>
+                  </div>
+                </div>
+              )}
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </>
   );
@@ -731,6 +762,9 @@ const styles: Record<string, React.CSSProperties> = {
     gap: 8,
     marginBottom: 4
   },
+  headerCaret: {
+    width: 16
+  },
   headerEn: {
     flex: 1,
     fontSize: 11,
@@ -779,12 +813,52 @@ const styles: Record<string, React.CSSProperties> = {
     color: '#9ca3af',
     fontSize: 13
   },
+  wordItem: {
+    borderBottom: '1px solid #f3f4f6'
+  },
   wordRow: {
     display: 'flex',
     alignItems: 'center',
     padding: '8px 0',
-    borderBottom: '1px solid #f3f4f6',
     gap: 8
+  },
+  caretBtn: {
+    width: 16,
+    height: 16,
+    padding: 0,
+    border: 'none',
+    background: 'transparent',
+    color: '#9ca3af',
+    fontSize: 8,
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0
+  },
+  expandedContent: {
+    padding: '8px 0 12px 24px',
+    background: '#f9fafb',
+    borderRadius: 4,
+    marginBottom: 4
+  },
+  sentenceRow: {
+    display: 'flex',
+    gap: 24
+  },
+  sentenceEn: {
+    flex: 1,
+    fontSize: 12,
+    color: '#4b5563',
+    fontStyle: 'italic',
+    lineHeight: 1.4
+  },
+  sentenceEs: {
+    flex: 1,
+    fontSize: 12,
+    color: '#6366f1',
+    fontStyle: 'italic',
+    lineHeight: 1.4
   },
   wordEn: {
     flex: 1,
