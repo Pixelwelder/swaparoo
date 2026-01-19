@@ -266,7 +266,7 @@ function injectStyles() {
       padding: 20px;
       border-radius: 8px;
       box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-      min-width: 280px;
+      width: 380px;
     }
 
     .swaparoo-modal h3 {
@@ -277,8 +277,100 @@ function injectStyles() {
       font-weight: 600;
     }
 
-    .swaparoo-input-wrapper {
-      position: relative;
+    .swaparoo-direction-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+
+    .swaparoo-direction-label {
+      font-size: 12px;
+      color: #6b7280;
+    }
+
+    .swaparoo-direction-value {
+      font-size: 12px;
+      color: #6366f1;
+      font-weight: 500;
+    }
+
+    .swaparoo-columns {
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+      margin-bottom: 16px;
+    }
+
+    .swaparoo-column {
+      flex: 1;
+    }
+
+    .swaparoo-arrow {
+      padding-top: 28px;
+      color: #9ca3af;
+      font-size: 16px;
+    }
+
+    .swaparoo-input-label {
+      display: block;
+      font-size: 11px;
+      font-weight: 500;
+      color: #6b7280;
+      margin-bottom: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .swaparoo-modal input {
+      width: 100%;
+      padding: 8px 10px;
+      border: 1px solid #e5e7eb;
+      border-radius: 6px;
+      font-size: 13px;
+      box-sizing: border-box;
+      color: #1f2937;
+      background: #f9fafb;
+      margin-bottom: 8px;
+      outline: none;
+    }
+
+    .swaparoo-modal textarea {
+      width: 100%;
+      padding: 8px 10px;
+      border: 1px solid #e5e7eb;
+      border-radius: 6px;
+      font-size: 12px;
+      box-sizing: border-box;
+      color: #6b7280;
+      background: #f9fafb;
+      resize: none;
+      font-family: inherit;
+      outline: none;
+    }
+
+    .swaparoo-swap-row {
+      display: flex;
+      justify-content: center;
+      margin-bottom: 16px;
+    }
+
+    .swaparoo-swap-btn {
+      padding: 6px 16px;
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      background: white;
+      color: #6366f1;
+      font-size: 13px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .swaparoo-swap-btn:hover {
+      background: #f5f3ff;
+      border-color: #6366f1;
     }
 
     .swaparoo-pos-row {
@@ -305,64 +397,6 @@ function injectStyles() {
     }
 
     .swaparoo-pos-select:focus {
-      border-color: #6366f1;
-    }
-
-    .swaparoo-modal-inputs {
-      display: flex;
-      align-items: flex-end;
-      gap: 8px;
-      margin-bottom: 16px;
-    }
-
-    .swaparoo-input-group {
-      flex: 1;
-      min-width: 0;
-    }
-
-    .swaparoo-input-label {
-      display: block;
-      font-size: 11px;
-      font-weight: 500;
-      color: #6b7280;
-      margin-bottom: 4px;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-    }
-
-    .swaparoo-modal-inputs input {
-      width: 100%;
-      padding: 10px 12px;
-      border: 1px solid #d1d5db;
-      border-radius: 6px;
-      font-size: 14px;
-      box-sizing: border-box;
-      color: #1f2937;
-      background: #f9fafb;
-      cursor: default;
-    }
-
-    .swaparoo-modal-inputs input:focus {
-      outline: none;
-    }
-
-    .swaparoo-swap-btn {
-      flex-shrink: 0;
-      width: 32px;
-      height: 32px;
-      border: 1px solid #d1d5db;
-      border-radius: 6px;
-      background: white;
-      color: #6366f1;
-      font-size: 16px;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    .swaparoo-swap-btn:hover {
-      background: #f5f3ff;
       border-color: #6366f1;
     }
 
@@ -549,20 +583,25 @@ function showAddWordModal(selectedWord: string, sentenceContext?: string | null,
   overlay.innerHTML = `
     <div class="swaparoo-modal">
       <h3>Add to Swaparoo</h3>
-      <div class="swaparoo-modal-inputs">
-        <div class="swaparoo-input-group">
+      <div class="swaparoo-direction-row">
+        <span class="swaparoo-direction-label">Source:</span>
+        <span class="swaparoo-direction-value"></span>
+      </div>
+      <div class="swaparoo-columns">
+        <div class="swaparoo-column">
           <label class="swaparoo-input-label">English</label>
-          <div class="swaparoo-input-wrapper">
-            <input type="text" class="swaparoo-input-en" readonly />
-          </div>
+          <input type="text" class="swaparoo-input-en" readonly />
+          <textarea class="swaparoo-sentence-en" rows="2" readonly placeholder="Sentence"></textarea>
         </div>
-        <button class="swaparoo-swap-btn" title="Swap">↔</button>
-        <div class="swaparoo-input-group">
+        <div class="swaparoo-arrow">→</div>
+        <div class="swaparoo-column">
           <label class="swaparoo-input-label">Spanish</label>
-          <div class="swaparoo-input-wrapper">
-            <input type="text" class="swaparoo-input-es" readonly />
-          </div>
+          <input type="text" class="swaparoo-input-es" readonly />
+          <textarea class="swaparoo-sentence-es" rows="2" readonly placeholder="Sentence"></textarea>
         </div>
+      </div>
+      <div class="swaparoo-swap-row">
+        <button class="swaparoo-swap-btn">↔ Swap Direction</button>
       </div>
       <div class="swaparoo-pos-row">
         <span class="swaparoo-pos-label">Part of speech:</span>
@@ -583,6 +622,9 @@ function showAddWordModal(selectedWord: string, sentenceContext?: string | null,
 
   const enInput = overlay.querySelector('.swaparoo-input-en') as HTMLInputElement;
   const esInput = overlay.querySelector('.swaparoo-input-es') as HTMLInputElement;
+  const enSentenceInput = overlay.querySelector('.swaparoo-sentence-en') as HTMLTextAreaElement;
+  const esSentenceInput = overlay.querySelector('.swaparoo-sentence-es') as HTMLTextAreaElement;
+  const directionValue = overlay.querySelector('.swaparoo-direction-value') as HTMLSpanElement;
   const posSelect = overlay.querySelector('.swaparoo-pos-select') as HTMLSelectElement;
   const swapBtn = overlay.querySelector('.swaparoo-swap-btn') as HTMLButtonElement;
   const cancelBtn = overlay.querySelector('.swaparoo-modal-btn-cancel');
@@ -603,12 +645,22 @@ function showAddWordModal(selectedWord: string, sentenceContext?: string | null,
     addBtn.disabled = !enInput.value.trim() || !esInput.value.trim();
   }
 
+  function updateDirectionDisplay() {
+    directionValue.textContent = originalSlot === 'en' ? 'English → Spanish' : 'Spanish → English';
+  }
+
+  function updateSentenceDisplay() {
+    enSentenceInput.value = sentenceEn || '';
+    esSentenceInput.value = sentenceEs || '';
+  }
+
   function close() {
     overlay.remove();
   }
 
   async function runTranslation() {
-    // Reset sentences based on original slot
+    updateDirectionDisplay();
+
     if (originalSlot === 'es') {
       sentenceEs = originalSentence;
       sentenceEn = null;
@@ -661,6 +713,7 @@ function showAddWordModal(selectedWord: string, sentenceContext?: string | null,
       esInput.placeholder = '';
     }
 
+    updateSentenceDisplay();
     updateAddButton();
   }
 
