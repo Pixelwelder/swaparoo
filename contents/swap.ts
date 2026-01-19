@@ -277,10 +277,21 @@ function injectStyles() {
       font-weight: 600;
     }
 
+    .swaparoo-input-wrapper {
+      position: relative;
+    }
+
     .swaparoo-pos {
-      font-weight: 400;
-      font-size: 13px;
-      color: #6366f1;
+      position: absolute;
+      right: 8px;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 10px;
+      font-weight: 500;
+      color: #9ca3af;
+      pointer-events: none;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
     }
 
     .swaparoo-modal-inputs {
@@ -466,8 +477,14 @@ chrome.runtime.onMessage.addListener((message) => {
   }
 });
 
+function detectPageLanguage(): 'en' | 'es' {
+  const lang = document.documentElement.lang?.toLowerCase() || '';
+  if (lang.startsWith('es')) return 'es';
+  return 'en';
+}
+
 function showAddWordModal(selectedWord: string, sentenceContext?: string | null, partOfSpeech?: string | null) {
-  let originalSlot: 'en' | 'es' = 'es';
+  let originalSlot: 'en' | 'es' = detectPageLanguage();
   const originalWord = selectedWord.toLowerCase();
   const context = sentenceContext || undefined;
   const pos = partOfSpeech || null;
@@ -476,16 +493,22 @@ function showAddWordModal(selectedWord: string, sentenceContext?: string | null,
   overlay.className = 'swaparoo-modal-overlay';
   overlay.innerHTML = `
     <div class="swaparoo-modal">
-      <h3>Add to Swaparoo${pos ? ` <span class="swaparoo-pos">(${pos})</span>` : ''}</h3>
+      <h3>Add to Swaparoo</h3>
       <div class="swaparoo-modal-inputs">
         <div class="swaparoo-input-group">
           <label class="swaparoo-input-label">English</label>
-          <input type="text" class="swaparoo-input-en" readonly />
+          <div class="swaparoo-input-wrapper">
+            <input type="text" class="swaparoo-input-en" readonly />
+            <span class="swaparoo-pos swaparoo-pos-en"></span>
+          </div>
         </div>
         <button class="swaparoo-swap-btn" title="Swap">↔</button>
         <div class="swaparoo-input-group">
           <label class="swaparoo-input-label">Spanish</label>
-          <input type="text" class="swaparoo-input-es" readonly />
+          <div class="swaparoo-input-wrapper">
+            <input type="text" class="swaparoo-input-es" readonly />
+            <span class="swaparoo-pos swaparoo-pos-es"></span>
+          </div>
         </div>
       </div>
       <div class="swaparoo-modal-buttons">
@@ -497,6 +520,8 @@ function showAddWordModal(selectedWord: string, sentenceContext?: string | null,
 
   const enInput = overlay.querySelector('.swaparoo-input-en') as HTMLInputElement;
   const esInput = overlay.querySelector('.swaparoo-input-es') as HTMLInputElement;
+  const enPos = overlay.querySelector('.swaparoo-pos-en') as HTMLSpanElement;
+  const esPos = overlay.querySelector('.swaparoo-pos-es') as HTMLSpanElement;
   const swapBtn = overlay.querySelector('.swaparoo-swap-btn') as HTMLButtonElement;
   const cancelBtn = overlay.querySelector('.swaparoo-modal-btn-cancel');
   const addBtn = overlay.querySelector('.swaparoo-modal-btn-add') as HTMLButtonElement;
@@ -510,6 +535,10 @@ function showAddWordModal(selectedWord: string, sentenceContext?: string | null,
   }
 
   async function runTranslation() {
+    // Show POS in the box with the original word
+    enPos.textContent = originalSlot === 'en' && pos ? pos : '';
+    esPos.textContent = originalSlot === 'es' && pos ? pos : '';
+
     if (originalSlot === 'es') {
       esInput.value = originalWord;
       enInput.value = '';
@@ -522,7 +551,7 @@ function showAddWordModal(selectedWord: string, sentenceContext?: string | null,
         context
       });
       enInput.value = response?.translation || '';
-      enInput.placeholder = 'English';
+      enInput.placeholder = '';
     } else {
       enInput.value = originalWord;
       esInput.value = '';
@@ -535,7 +564,7 @@ function showAddWordModal(selectedWord: string, sentenceContext?: string | null,
         context
       });
       esInput.value = response?.translation || '';
-      esInput.placeholder = 'Spanish';
+      esInput.placeholder = '';
     }
 
     updateAddButton();
