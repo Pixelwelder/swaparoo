@@ -1,19 +1,49 @@
-import { useEffect, useState } from 'react';
-import { getState, setState, addWord, removeWord, type UserState } from './lib/storage';
+import { useEffect, useState, useRef } from 'react';
+import { getState, setState, addWord, removeWord, setApiKey, translateWord, type UserState } from './lib/storage';
 
 function IndexPopup() {
   const [state, setLocalState] = useState<UserState | null>(null);
   const [loading, setLoading] = useState(true);
   const [newEn, setNewEn] = useState('');
   const [newEs, setNewEs] = useState('');
+  const [translating, setTranslating] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [apiKeyInput, setApiKeyInput] = useState('');
+  const debounceRef = useRef<number | null>(null);
 
   useEffect(() => {
     loadState();
   }, []);
 
+  useEffect(() => {
+    if (!state?.deeplApiKey || !newEn.trim()) {
+      return;
+    }
+
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current);
+    }
+
+    debounceRef.current = window.setTimeout(async () => {
+      setTranslating(true);
+      const result = await translateWord(newEn.trim(), state.deeplApiKey!);
+      if (result) {
+        setNewEs(result);
+      }
+      setTranslating(false);
+    }, 500);
+
+    return () => {
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current);
+      }
+    };
+  }, [newEn, state?.deeplApiKey]);
+
   async function loadState() {
     const s = await getState();
     setLocalState(s);
+    setApiKeyInput(s.deeplApiKey || '');
     setLoading(false);
   }
 
@@ -22,9 +52,25 @@ function IndexPopup() {
     setLocalState(prev => prev ? { ...prev, enabled } : null);
   }
 
+  async function handleSaveApiKey() {
+    await setApiKey(apiKeyInput.trim());
+    setLocalState(prev => prev ? { ...prev, deeplApiKey: apiKeyInput.trim() } : null);
+    setShowSettings(false);
+  }
+
   async function handleAdd() {
     if (newEn.trim() && newEs.trim()) {
-      await addWord(newEn.trim(), newEs.trim());
+      const en = newEn.trim().toLowerCase();
+      const es = newEs.trim();
+      await addWord(en, es);
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (tab?.id) {
+        chrome.tabs.sendMessage(tab.id, {
+          type: 'SWAPAROO_ADD_WORD_DIRECT',
+          word: en,
+          translation: es
+        });
+      }
       setNewEn('');
       setNewEs('');
       await loadState();
@@ -57,24 +103,57 @@ function IndexPopup() {
     <div style={styles.popup}>
       <header style={styles.header}>
         <h1 style={styles.title}>Swaparoo</h1>
-        <label style={styles.toggle}>
-          <input
-            type="checkbox"
-            checked={state.enabled}
-            onChange={(e) => updateEnabled(e.target.checked)}
-            style={styles.toggleInput}
-          />
-          <span style={{
-            ...styles.toggleSlider,
-            backgroundColor: state.enabled ? '#6366f1' : '#cbd5e1'
-          }}>
+        <div style={styles.headerRight}>
+          <button
+            onClick={() => setShowSettings(!showSettings)}
+            style={styles.settingsBtn}
+            title="Settings"
+          >
+            ⚙
+          </button>
+          <label style={styles.toggle}>
+            <input
+              type="checkbox"
+              checked={state.enabled}
+              onChange={(e) => updateEnabled(e.target.checked)}
+              style={styles.toggleInput}
+            />
             <span style={{
-              ...styles.toggleKnob,
-              transform: state.enabled ? 'translateX(20px)' : 'translateX(0)'
-            }} />
-          </span>
-        </label>
+              ...styles.toggleSlider,
+              backgroundColor: state.enabled ? '#6366f1' : '#cbd5e1'
+            }}>
+              <span style={{
+                ...styles.toggleKnob,
+                transform: state.enabled ? 'translateX(20px)' : 'translateX(0)'
+              }} />
+            </span>
+          </label>
+        </div>
       </header>
+
+      {showSettings && (
+        <div style={styles.settings}>
+          <label style={styles.settingsLabel}>DeepL API Key</label>
+          <div style={styles.settingsRow}>
+            <input
+              type="password"
+              placeholder="Enter API key"
+              value={apiKeyInput}
+              onChange={(e) => setApiKeyInput(e.target.value)}
+              style={styles.input}
+            />
+            <button onClick={handleSaveApiKey} style={styles.saveBtn}>Save</button>
+          </div>
+          <a
+            href="https://www.deepl.com/pro-api"
+            target="_blank"
+            rel="noopener noreferrer"
+            style={styles.settingsLink}
+          >
+            Get free API key →
+          </a>
+        </div>
+      )}
 
       <div style={styles.addForm}>
         <input
@@ -83,18 +162,27 @@ function IndexPopup() {
           value={newEn}
           onChange={(e) => setNewEn(e.target.value)}
           onKeyDown={handleKeyDown}
-          style={styles.input}
+          style={styles.formInput}
         />
         <input
           type="text"
-          placeholder="Spanish"
+          placeholder={translating ? 'Translating...' : 'Spanish'}
           value={newEs}
           onChange={(e) => setNewEs(e.target.value)}
           onKeyDown={handleKeyDown}
-          style={styles.input}
+          style={{
+            ...styles.formInput,
+            ...(translating ? styles.inputTranslating : {})
+          }}
         />
         <button onClick={handleAdd} style={styles.addBtn}>+</button>
       </div>
+
+      {!state.deeplApiKey && (
+        <div style={styles.hint}>
+          Add a DeepL API key in settings for auto-translation
+        </div>
+      )}
 
       <div style={styles.wordList}>
         {state.words.length === 0 ? (
@@ -138,11 +226,24 @@ const styles: Record<string, React.CSSProperties> = {
     paddingBottom: 12,
     borderBottom: '1px solid #e5e7eb'
   },
+  headerRight: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8
+  },
   title: {
     fontSize: 18,
     fontWeight: 600,
     color: '#1f2937',
     margin: 0
+  },
+  settingsBtn: {
+    background: 'transparent',
+    border: 'none',
+    fontSize: 18,
+    cursor: 'pointer',
+    padding: 4,
+    color: '#6b7280'
   },
   toggle: {
     position: 'relative',
@@ -176,20 +277,76 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: '50%',
     transition: '0.2s'
   },
+  settings: {
+    marginBottom: 12,
+    padding: 12,
+    background: '#f9fafb',
+    borderRadius: 6
+  },
+  settingsLabel: {
+    fontSize: 12,
+    fontWeight: 500,
+    color: '#4b5563',
+    marginBottom: 6,
+    display: 'block'
+  },
+  settingsRow: {
+    display: 'flex',
+    gap: 8
+  },
+  settingsLink: {
+    fontSize: 11,
+    color: '#6366f1',
+    textDecoration: 'none',
+    marginTop: 8,
+    display: 'block'
+  },
+  saveBtn: {
+    flexShrink: 0,
+    padding: '8px 12px',
+    border: 'none',
+    borderRadius: 6,
+    background: '#6366f1',
+    color: 'white',
+    fontSize: 12,
+    cursor: 'pointer'
+  },
   addForm: {
     display: 'flex',
     gap: 8,
-    marginBottom: 12
+    marginBottom: 8
   },
-  input: {
+  formInput: {
     flex: 1,
+    minWidth: 0,
     padding: '8px 10px',
     border: '1px solid #e5e7eb',
     borderRadius: 6,
     fontSize: 13,
-    outline: 'none'
+    outline: 'none',
+    boxSizing: 'border-box' as const
+  },
+  input: {
+    flex: 1,
+    minWidth: 0,
+    padding: '8px 10px',
+    border: '1px solid #e5e7eb',
+    borderRadius: 6,
+    fontSize: 13,
+    outline: 'none',
+    boxSizing: 'border-box' as const
+  },
+  inputTranslating: {
+    color: '#9ca3af'
+  },
+  hint: {
+    fontSize: 11,
+    color: '#9ca3af',
+    marginBottom: 12,
+    textAlign: 'center'
   },
   addBtn: {
+    flexShrink: 0,
     width: 36,
     border: 'none',
     borderRadius: 6,

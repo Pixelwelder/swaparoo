@@ -191,13 +191,16 @@ function injectStyles() {
   const style = document.createElement('style');
   style.textContent = `
     .swaparoo {
-      border-bottom: 1px dotted #6366f1;
+      background-color: rgba(99, 102, 241, 0.08);
+      border-radius: 2px;
+      padding: 0 2px;
+      margin: 0 -2px;
       cursor: help;
       color: inherit;
     }
 
     .swaparoo:hover {
-      background-color: rgba(99, 102, 241, 0.1);
+      background-color: rgba(99, 102, 241, 0.18);
     }
 
     .swaparoo-tooltip {
@@ -317,6 +320,13 @@ function injectStyles() {
 chrome.runtime.onMessage.addListener((message) => {
   if (message.type === 'SWAPAROO_ADD_WORD') {
     showAddWordModal(message.word);
+  } else if (message.type === 'SWAPAROO_ADD_WORD_DIRECT') {
+    if (!activePool) {
+      activePool = new Map();
+      injectStyles();
+    }
+    activePool.set(message.word, message.translation);
+    processDocument();
   } else if (message.type === 'SWAPAROO_REMOVE_WORD') {
     activePool?.delete(message.word);
     removeAllInstances(message.word);
