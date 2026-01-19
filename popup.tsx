@@ -97,6 +97,13 @@ function IndexPopup() {
   async function updateEnabled(enabled: boolean) {
     await setState({ enabled });
     setLocalState(prev => prev ? { ...prev, enabled } : null);
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (tab?.id) {
+      chrome.tabs.sendMessage(tab.id, {
+        type: 'SWAPAROO_TOGGLE',
+        enabled
+      });
+    }
   }
 
   async function handleSaveApiKey() {

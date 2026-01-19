@@ -472,6 +472,36 @@ function extractSentenceContext(): string | null {
   return null;
 }
 
+function removeAllSwaps() {
+  document.querySelectorAll('.swaparoo').forEach(span => {
+    const text = document.createTextNode((span as HTMLSpanElement).dataset.en || '');
+    span.parentNode?.replaceChild(text, span);
+  });
+}
+
+async function reprocessWithState() {
+  const state = await getState();
+  enabled = state.enabled;
+
+  if (!enabled) {
+    removeAllSwaps();
+    return;
+  }
+
+  const hostname = window.location.hostname;
+  if (isDomainBlocked(hostname, state.blockedDomains || [])) {
+    removeAllSwaps();
+    return;
+  }
+
+  activePool = new Map();
+  state.words.forEach(({ en, es }) => {
+    activePool.set(en.toLowerCase(), es);
+  });
+
+  processDocument();
+}
+
 // Listen for messages from background and popup
 chrome.runtime.onMessage.addListener((message) => {
   if (message.type === 'SWAPAROO_ADD_WORD') {
@@ -488,6 +518,14 @@ chrome.runtime.onMessage.addListener((message) => {
   } else if (message.type === 'SWAPAROO_REMOVE_WORD') {
     activePool?.delete(message.word);
     removeAllInstances(message.word);
+  } else if (message.type === 'SWAPAROO_TOGGLE') {
+    if (message.enabled) {
+      injectStyles();
+      reprocessWithState();
+    } else {
+      removeAllSwaps();
+      enabled = false;
+    }
   }
 });
 
