@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef, useMemo } from 'react';
+import nlp from 'compromise';
 import {
   getState,
   setState,
@@ -23,6 +24,7 @@ function IndexPopup() {
   const [loading, setLoading] = useState(true);
   const [newEn, setNewEn] = useState('');
   const [newEs, setNewEs] = useState('');
+  const [newPos, setNewPos] = useState('');
   const [translatingEs, setTranslatingEs] = useState(false);
   const [translatingEn, setTranslatingEn] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
@@ -115,11 +117,33 @@ function IndexPopup() {
     await loadState();
   }
 
+  function detectPartOfSpeech(word: string): string {
+    const doc = nlp(word);
+    const terms = doc.terms().json();
+    if (terms.length > 0 && terms[0].terms?.length > 0) {
+      const tags = terms[0].terms[0].tags || [];
+      if (tags.includes('Noun')) return 'noun';
+      if (tags.includes('Verb')) return 'verb';
+      if (tags.includes('Adjective')) return 'adj';
+      if (tags.includes('Adverb')) return 'adv';
+    }
+    return '';
+  }
+
+  useEffect(() => {
+    if (newEn.trim()) {
+      const detected = detectPartOfSpeech(newEn.trim());
+      setNewPos(detected);
+    } else {
+      setNewPos('');
+    }
+  }, [newEn]);
+
   async function handleAdd() {
     if (newEn.trim() && newEs.trim()) {
       const en = newEn.trim().toLowerCase();
       const es = newEs.trim();
-      await addWord(en, es);
+      await addWord(en, es, newPos || undefined);
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
       if (tab?.id) {
         chrome.tabs.sendMessage(tab.id, {
@@ -130,6 +154,7 @@ function IndexPopup() {
       }
       setNewEn('');
       setNewEs('');
+      setNewPos('');
       await loadState();
     }
   }
@@ -325,6 +350,17 @@ function IndexPopup() {
                 ...(translatingEs ? styles.inputTranslating : {})
               }}
             />
+            <select
+              value={newPos}
+              onChange={(e) => setNewPos(e.target.value)}
+              style={styles.posSelect}
+            >
+              <option value="">—</option>
+              <option value="noun">noun</option>
+              <option value="verb">verb</option>
+              <option value="adj">adj</option>
+              <option value="adv">adv</option>
+            </select>
             <button onClick={handleAdd} style={styles.addBtn}>+</button>
           </div>
 
@@ -442,9 +478,9 @@ function WordList({ words, sortBy, onSortChange, onRemove, onAction, actionIcon,
       </div>
 
       <div style={styles.wordList}>
-        {sortedWords.map(({ en, es, addedAt }) => (
+        {sortedWords.map(({ en, es, addedAt, pos }) => (
           <div key={en} style={styles.wordRow}>
-            <span style={styles.wordEn}>{en}</span>
+            <span style={styles.wordEn}>{en}{pos && <span style={styles.wordPos}> {pos === 'noun' ? 'N' : pos === 'verb' ? 'V' : pos === 'adj' ? 'Adj' : pos === 'adv' ? 'Adv' : pos.toUpperCase()}</span>}</span>
             <span style={styles.wordArrow}>→</span>
             <span style={styles.wordEs}>{es}</span>
             <span style={styles.wordAdded}>{getDaysAgo(addedAt)}</span>
@@ -658,6 +694,18 @@ const styles: Record<string, React.CSSProperties> = {
     marginBottom: 12,
     textAlign: 'center'
   },
+  posSelect: {
+    flexShrink: 0,
+    width: 60,
+    padding: '8px 4px',
+    border: '1px solid #e5e7eb',
+    borderRadius: 6,
+    fontSize: 11,
+    color: '#6b7280',
+    background: 'white',
+    cursor: 'pointer',
+    outline: 'none'
+  },
   addBtn: {
     flexShrink: 0,
     width: 36,
@@ -735,6 +783,11 @@ const styles: Record<string, React.CSSProperties> = {
     flex: 1,
     fontSize: 13,
     color: '#1f2937'
+  },
+  wordPos: {
+    fontSize: 10,
+    color: '#9ca3af',
+    fontWeight: 400
   },
   wordArrow: {
     color: '#9ca3af',

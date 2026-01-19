@@ -281,17 +281,31 @@ function injectStyles() {
       position: relative;
     }
 
-    .swaparoo-pos {
-      position: absolute;
-      right: 8px;
-      top: 50%;
-      transform: translateY(-50%);
-      font-size: 10px;
-      font-weight: 500;
-      color: #9ca3af;
-      pointer-events: none;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
+    .swaparoo-pos-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+
+    .swaparoo-pos-label {
+      font-size: 12px;
+      color: #6b7280;
+    }
+
+    .swaparoo-pos-select {
+      padding: 4px 8px;
+      border: 1px solid #d1d5db;
+      border-radius: 4px;
+      font-size: 12px;
+      color: #374151;
+      background: white;
+      cursor: pointer;
+      outline: none;
+    }
+
+    .swaparoo-pos-select:focus {
+      border-color: #6366f1;
     }
 
     .swaparoo-modal-inputs {
@@ -499,7 +513,6 @@ function showAddWordModal(selectedWord: string, sentenceContext?: string | null,
           <label class="swaparoo-input-label">English</label>
           <div class="swaparoo-input-wrapper">
             <input type="text" class="swaparoo-input-en" readonly />
-            <span class="swaparoo-pos swaparoo-pos-en"></span>
           </div>
         </div>
         <button class="swaparoo-swap-btn" title="Swap">↔</button>
@@ -507,9 +520,18 @@ function showAddWordModal(selectedWord: string, sentenceContext?: string | null,
           <label class="swaparoo-input-label">Spanish</label>
           <div class="swaparoo-input-wrapper">
             <input type="text" class="swaparoo-input-es" readonly />
-            <span class="swaparoo-pos swaparoo-pos-es"></span>
           </div>
         </div>
+      </div>
+      <div class="swaparoo-pos-row">
+        <span class="swaparoo-pos-label">Part of speech:</span>
+        <select class="swaparoo-pos-select">
+          <option value="">—</option>
+          <option value="noun">noun</option>
+          <option value="verb">verb</option>
+          <option value="adj">adjective</option>
+          <option value="adv">adverb</option>
+        </select>
       </div>
       <div class="swaparoo-modal-buttons">
         <button class="swaparoo-modal-btn swaparoo-modal-btn-cancel">Cancel</button>
@@ -520,11 +542,21 @@ function showAddWordModal(selectedWord: string, sentenceContext?: string | null,
 
   const enInput = overlay.querySelector('.swaparoo-input-en') as HTMLInputElement;
   const esInput = overlay.querySelector('.swaparoo-input-es') as HTMLInputElement;
-  const enPos = overlay.querySelector('.swaparoo-pos-en') as HTMLSpanElement;
-  const esPos = overlay.querySelector('.swaparoo-pos-es') as HTMLSpanElement;
+  const posSelect = overlay.querySelector('.swaparoo-pos-select') as HTMLSelectElement;
   const swapBtn = overlay.querySelector('.swaparoo-swap-btn') as HTMLButtonElement;
   const cancelBtn = overlay.querySelector('.swaparoo-modal-btn-cancel');
   const addBtn = overlay.querySelector('.swaparoo-modal-btn-add') as HTMLButtonElement;
+
+  // Map detected POS abbreviations to select values
+  const posMap: Record<string, string> = {
+    'n': 'noun',
+    'v': 'verb',
+    'adj': 'adj',
+    'adv': 'adv'
+  };
+  if (pos && posMap[pos]) {
+    posSelect.value = posMap[pos];
+  }
 
   function updateAddButton() {
     addBtn.disabled = !enInput.value.trim() || !esInput.value.trim();
@@ -535,10 +567,6 @@ function showAddWordModal(selectedWord: string, sentenceContext?: string | null,
   }
 
   async function runTranslation() {
-    // Show POS in the box with the original word
-    enPos.textContent = originalSlot === 'en' && pos ? pos : '';
-    esPos.textContent = originalSlot === 'es' && pos ? pos : '';
-
     if (originalSlot === 'es') {
       esInput.value = originalWord;
       enInput.value = '';
@@ -578,9 +606,10 @@ function showAddWordModal(selectedWord: string, sentenceContext?: string | null,
   async function add() {
     const en = enInput.value.trim().toLowerCase();
     const es = esInput.value.trim().toLowerCase();
+    const selectedPos = posSelect.value || undefined;
 
     if (en && es) {
-      await addWord(en, es);
+      await addWord(en, es, selectedPos);
       if (!activePool) {
         activePool = new Map();
         injectStyles();

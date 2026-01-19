@@ -4,6 +4,7 @@ export interface WordPair {
   en: string;
   es: string;
   addedAt: number;
+  pos?: string;
 }
 
 export type SortOption = 'en-asc' | 'en-desc' | 'es-asc' | 'es-desc' | 'added-asc' | 'added-desc';
@@ -49,11 +50,11 @@ export async function setState(partial: Partial<UserState>): Promise<void> {
   await storage.set('userState', { ...current, ...partial });
 }
 
-export async function addWord(en: string, es: string): Promise<void> {
+export async function addWord(en: string, es: string, pos?: string): Promise<void> {
   const state = await getState();
   const exists = state.words.some(w => w.en.toLowerCase() === en.toLowerCase());
   if (!exists) {
-    await setState({ words: [...state.words, { en, es, addedAt: Date.now() }] });
+    await setState({ words: [...state.words, { en, es, addedAt: Date.now(), pos }] });
   }
 }
 
