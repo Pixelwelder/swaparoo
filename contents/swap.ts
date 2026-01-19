@@ -267,25 +267,55 @@ function injectStyles() {
       margin: 0 0 16px 0;
       font-size: 16px;
       color: #1f2937;
-    }
-
-    .swaparoo-modal-word {
+      text-align: center;
       font-weight: 600;
-      color: #6366f1;
     }
 
-    .swaparoo-modal input {
-      width: 100%;
+    .swaparoo-modal-inputs {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+
+    .swaparoo-modal-inputs input {
+      flex: 1;
       padding: 10px 12px;
-      border: 1px solid #e5e7eb;
+      border: 1px solid #d1d5db;
       border-radius: 6px;
       font-size: 14px;
-      margin-bottom: 16px;
       box-sizing: border-box;
+      min-width: 0;
+      color: #1f2937;
+      background: white;
     }
 
-    .swaparoo-modal input:focus {
+    .swaparoo-modal-inputs input::placeholder {
+      color: #9ca3af;
+    }
+
+    .swaparoo-modal-inputs input:focus {
       outline: none;
+      border-color: #6366f1;
+    }
+
+    .swaparoo-swap-btn {
+      flex-shrink: 0;
+      width: 32px;
+      height: 32px;
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      background: white;
+      color: #6366f1;
+      font-size: 16px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .swaparoo-swap-btn:hover {
+      background: #f5f3ff;
       border-color: #6366f1;
     }
 
@@ -300,17 +330,31 @@ function injectStyles() {
       border: none;
       border-radius: 6px;
       font-size: 13px;
+      font-weight: 500;
       cursor: pointer;
     }
 
     .swaparoo-modal-btn-cancel {
       background: #f3f4f6;
-      color: #4b5563;
+      color: #374151;
+    }
+
+    .swaparoo-modal-btn-cancel:hover {
+      background: #e5e7eb;
     }
 
     .swaparoo-modal-btn-add {
       background: #6366f1;
       color: white;
+    }
+
+    .swaparoo-modal-btn-add:hover {
+      background: #4f46e5;
+    }
+
+    .swaparoo-modal-btn-add:disabled {
+      background: #a5b4fc;
+      cursor: not-allowed;
     }
   `;
   document.head.appendChild(style);
@@ -333,41 +377,95 @@ chrome.runtime.onMessage.addListener((message) => {
   }
 });
 
-function showAddWordModal(englishWord: string) {
+function showAddWordModal(selectedWord: string) {
+  let originalSlot: 'en' | 'es' = 'es';
+  const originalWord = selectedWord.toLowerCase();
+
   const overlay = document.createElement('div');
   overlay.className = 'swaparoo-modal-overlay';
   overlay.innerHTML = `
     <div class="swaparoo-modal">
-      <h3>Add "<span class="swaparoo-modal-word">${englishWord}</span>" to Swaparoo</h3>
-      <input type="text" placeholder="Spanish translation" autofocus />
+      <h3>Add to Swaparoo</h3>
+      <div class="swaparoo-modal-inputs">
+        <input type="text" class="swaparoo-input-en" placeholder="English" />
+        <button class="swaparoo-swap-btn" title="Swap">↔</button>
+        <input type="text" class="swaparoo-input-es" placeholder="Spanish" />
+      </div>
       <div class="swaparoo-modal-buttons">
         <button class="swaparoo-modal-btn swaparoo-modal-btn-cancel">Cancel</button>
-        <button class="swaparoo-modal-btn swaparoo-modal-btn-add">Add</button>
+        <button class="swaparoo-modal-btn swaparoo-modal-btn-add" disabled>Add</button>
       </div>
     </div>
   `;
 
-  const input = overlay.querySelector('input') as HTMLInputElement;
+  const enInput = overlay.querySelector('.swaparoo-input-en') as HTMLInputElement;
+  const esInput = overlay.querySelector('.swaparoo-input-es') as HTMLInputElement;
+  const swapBtn = overlay.querySelector('.swaparoo-swap-btn') as HTMLButtonElement;
   const cancelBtn = overlay.querySelector('.swaparoo-modal-btn-cancel');
-  const addBtn = overlay.querySelector('.swaparoo-modal-btn-add');
+  const addBtn = overlay.querySelector('.swaparoo-modal-btn-add') as HTMLButtonElement;
+
+  function updateAddButton() {
+    addBtn.disabled = !enInput.value.trim() || !esInput.value.trim();
+  }
 
   function close() {
     overlay.remove();
   }
 
+  async function runTranslation() {
+    if (originalSlot === 'es') {
+      esInput.value = originalWord;
+      enInput.value = '';
+      enInput.placeholder = 'Translating...';
+
+      const response = await chrome.runtime.sendMessage({
+        type: 'SWAPAROO_TRANSLATE',
+        word: originalWord,
+        direction: 'es-to-en'
+      });
+      enInput.value = response?.translation || '';
+      enInput.placeholder = 'English';
+    } else {
+      enInput.value = originalWord;
+      esInput.value = '';
+      esInput.placeholder = 'Translating...';
+
+      const response = await chrome.runtime.sendMessage({
+        type: 'SWAPAROO_TRANSLATE',
+        word: originalWord,
+        direction: 'en-to-es'
+      });
+      esInput.value = response?.translation || '';
+      esInput.placeholder = 'Spanish';
+    }
+
+    updateAddButton();
+  }
+
+  function handleSwap() {
+    originalSlot = originalSlot === 'es' ? 'en' : 'es';
+    runTranslation();
+  }
+
   async function add() {
-    const spanish = input.value.trim();
-    if (spanish) {
-      await addWord(englishWord.toLowerCase(), spanish);
+    const en = enInput.value.trim().toLowerCase();
+    const es = esInput.value.trim().toLowerCase();
+
+    if (en && es) {
+      await addWord(en, es);
       if (!activePool) {
         activePool = new Map();
         injectStyles();
       }
-      activePool.set(englishWord.toLowerCase(), spanish);
+      activePool.set(en, es);
       processDocument();
       close();
     }
   }
+
+  swapBtn.addEventListener('click', handleSwap);
+  enInput.addEventListener('input', updateAddButton);
+  esInput.addEventListener('input', updateAddButton);
 
   overlay.addEventListener('click', (e) => {
     if (e.target === overlay) close();
@@ -376,13 +474,13 @@ function showAddWordModal(englishWord: string) {
   cancelBtn?.addEventListener('click', close);
   addBtn?.addEventListener('click', add);
 
-  input.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') add();
+  overlay.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !addBtn.disabled) add();
     if (e.key === 'Escape') close();
   });
 
   document.body.appendChild(overlay);
-  input.focus();
+  runTranslation();
 }
 
 init();

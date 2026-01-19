@@ -3,25 +3,29 @@ import { Storage } from '@plasmohq/storage';
 export interface WordPair {
   en: string;
   es: string;
+  addedAt: number;
 }
+
+export type SortOption = 'en-asc' | 'en-desc' | 'es-asc' | 'es-desc' | 'added-asc' | 'added-desc';
 
 export interface UserState {
   enabled: boolean;
   words: WordPair[];
   deeplApiKey?: string;
+  sortBy?: SortOption;
 }
 
 const DEFAULT_WORDS: WordPair[] = [
-  { en: 'time', es: 'tiempo' },
-  { en: 'world', es: 'mundo' },
-  { en: 'life', es: 'vida' },
-  { en: 'day', es: 'día' },
-  { en: 'house', es: 'casa' },
-  { en: 'water', es: 'agua' },
-  { en: 'money', es: 'dinero' },
-  { en: 'book', es: 'libro' },
-  { en: 'friend', es: 'amigo' },
-  { en: 'family', es: 'familia' }
+  { en: 'time', es: 'tiempo', addedAt: 0 },
+  { en: 'world', es: 'mundo', addedAt: 0 },
+  { en: 'life', es: 'vida', addedAt: 0 },
+  { en: 'day', es: 'día', addedAt: 0 },
+  { en: 'house', es: 'casa', addedAt: 0 },
+  { en: 'water', es: 'agua', addedAt: 0 },
+  { en: 'money', es: 'dinero', addedAt: 0 },
+  { en: 'book', es: 'libro', addedAt: 0 },
+  { en: 'friend', es: 'amigo', addedAt: 0 },
+  { en: 'family', es: 'familia', addedAt: 0 }
 ];
 
 const DEFAULT_STATE: UserState = {
@@ -45,7 +49,7 @@ export async function addWord(en: string, es: string): Promise<void> {
   const state = await getState();
   const exists = state.words.some(w => w.en.toLowerCase() === en.toLowerCase());
   if (!exists) {
-    await setState({ words: [...state.words, { en, es }] });
+    await setState({ words: [...state.words, { en, es, addedAt: Date.now() }] });
   }
 }
 
@@ -65,7 +69,11 @@ export async function setApiKey(key: string): Promise<void> {
   await setState({ deeplApiKey: key });
 }
 
-export async function translateWord(word: string, apiKey: string): Promise<string | null> {
+export async function translateWord(
+  word: string,
+  apiKey: string,
+  direction: 'en-to-es' | 'es-to-en' = 'en-to-es'
+): Promise<string | null> {
   try {
     const response = await fetch('https://api-free.deepl.com/v2/translate', {
       method: 'POST',
@@ -75,8 +83,8 @@ export async function translateWord(word: string, apiKey: string): Promise<strin
       },
       body: JSON.stringify({
         text: [word],
-        source_lang: 'EN',
-        target_lang: 'ES'
+        source_lang: direction === 'en-to-es' ? 'EN' : 'ES',
+        target_lang: direction === 'en-to-es' ? 'ES' : 'EN'
       })
     });
 

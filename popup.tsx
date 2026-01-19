@@ -1,5 +1,5 @@
-import { useEffect, useState, useRef } from 'react';
-import { getState, setState, addWord, removeWord, setApiKey, translateWord, type UserState } from './lib/storage';
+import { useEffect, useState, useRef, useMemo } from 'react';
+import { getState, setState, addWord, removeWord, setApiKey, translateWord, type UserState, type SortOption } from './lib/storage';
 
 function IndexPopup() {
   const [state, setLocalState] = useState<UserState | null>(null);
@@ -95,6 +95,57 @@ function IndexPopup() {
     }
   }
 
+  async function handleSortChange(sortBy: SortOption) {
+    await setState({ sortBy });
+    setLocalState(prev => prev ? { ...prev, sortBy } : null);
+  }
+
+  function handleColumnClick(column: 'en' | 'es' | 'added') {
+    const currentSort = state?.sortBy || 'added-desc';
+    const [currentCol, currentDir] = currentSort.split('-') as [string, string];
+
+    let newSort: SortOption;
+    if (currentCol === column) {
+      newSort = `${column}-${currentDir === 'asc' ? 'desc' : 'asc'}` as SortOption;
+    } else {
+      newSort = `${column}-asc` as SortOption;
+    }
+    handleSortChange(newSort);
+  }
+
+  function getDaysAgo(timestamp: number): string {
+    if (!timestamp) return '—';
+    const now = Date.now();
+    const days = Math.floor((now - timestamp) / (1000 * 60 * 60 * 24));
+    return `${days}d`;
+  }
+
+  function getSortIndicator(column: 'en' | 'es' | 'added'): string {
+    const currentSort = state?.sortBy || 'added-desc';
+    const [currentCol, currentDir] = currentSort.split('-');
+    if (currentCol !== column) return '';
+    return currentDir === 'asc' ? ' ▲' : ' ▼';
+  }
+
+  const sortedWords = useMemo(() => {
+    if (!state) return [];
+    const words = [...state.words];
+    const sortBy = state.sortBy || 'added-desc';
+    const [column, direction] = sortBy.split('-');
+    const mult = direction === 'asc' ? 1 : -1;
+
+    switch (column) {
+      case 'en':
+        return words.sort((a, b) => mult * a.en.localeCompare(b.en));
+      case 'es':
+        return words.sort((a, b) => mult * a.es.localeCompare(b.es));
+      case 'added':
+        return words.sort((a, b) => mult * ((a.addedAt || 0) - (b.addedAt || 0)));
+      default:
+        return words;
+    }
+  }, [state?.words, state?.sortBy]);
+
   if (loading || !state) {
     return <div style={styles.popup}>Loading...</div>;
   }
@@ -184,15 +235,41 @@ function IndexPopup() {
         </div>
       )}
 
+      {state.words.length > 0 && (
+        <div style={styles.tableHeader}>
+          <span
+            style={styles.headerEn}
+            onClick={() => handleColumnClick('en')}
+          >
+            English{getSortIndicator('en')}
+          </span>
+          <span style={styles.headerArrow}></span>
+          <span
+            style={styles.headerEs}
+            onClick={() => handleColumnClick('es')}
+          >
+            Spanish{getSortIndicator('es')}
+          </span>
+          <span
+            style={styles.headerAdded}
+            onClick={() => handleColumnClick('added')}
+          >
+            Added{getSortIndicator('added')}
+          </span>
+          <span style={styles.headerAction}></span>
+        </div>
+      )}
+
       <div style={styles.wordList}>
-        {state.words.length === 0 ? (
+        {sortedWords.length === 0 ? (
           <div style={styles.empty}>No words yet. Add some above.</div>
         ) : (
-          state.words.map(({ en, es }) => (
+          sortedWords.map(({ en, es, addedAt }) => (
             <div key={en} style={styles.wordRow}>
               <span style={styles.wordEn}>{en}</span>
               <span style={styles.wordArrow}>→</span>
               <span style={styles.wordEs}>{es}</span>
+              <span style={styles.wordAdded}>{getDaysAgo(addedAt)}</span>
               <button
                 onClick={() => handleRemove(en)}
                 style={styles.removeBtn}
@@ -213,7 +290,7 @@ function IndexPopup() {
 
 const styles: Record<string, React.CSSProperties> = {
   popup: {
-    width: 320,
+    width: 380,
     padding: 16,
     fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
     background: '#fff'
@@ -345,6 +422,51 @@ const styles: Record<string, React.CSSProperties> = {
     marginBottom: 12,
     textAlign: 'center'
   },
+  tableHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    padding: '8px 0',
+    borderBottom: '1px solid #e5e7eb',
+    gap: 8,
+    marginBottom: 4
+  },
+  headerEn: {
+    flex: 1,
+    fontSize: 11,
+    fontWeight: 600,
+    color: '#6b7280',
+    textTransform: 'uppercase' as const,
+    letterSpacing: '0.5px',
+    cursor: 'pointer',
+    userSelect: 'none' as const
+  },
+  headerArrow: {
+    width: 16
+  },
+  headerEs: {
+    flex: 1,
+    fontSize: 11,
+    fontWeight: 600,
+    color: '#6b7280',
+    textTransform: 'uppercase' as const,
+    letterSpacing: '0.5px',
+    cursor: 'pointer',
+    userSelect: 'none' as const
+  },
+  headerAdded: {
+    width: 60,
+    fontSize: 11,
+    fontWeight: 600,
+    color: '#6b7280',
+    textTransform: 'uppercase' as const,
+    letterSpacing: '0.5px',
+    cursor: 'pointer',
+    userSelect: 'none' as const,
+    textAlign: 'right' as const
+  },
+  headerAction: {
+    width: 24
+  },
   addBtn: {
     flexShrink: 0,
     width: 36,
@@ -387,6 +509,12 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 13,
     color: '#6366f1',
     fontWeight: 500
+  },
+  wordAdded: {
+    width: 60,
+    fontSize: 12,
+    color: '#9ca3af',
+    textAlign: 'right' as const
   },
   removeBtn: {
     width: 24,
