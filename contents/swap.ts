@@ -285,30 +285,40 @@ function injectStyles() {
 
     .swaparoo-modal-inputs {
       display: flex;
-      align-items: center;
+      align-items: flex-end;
       gap: 8px;
       margin-bottom: 16px;
     }
 
-    .swaparoo-modal-inputs input {
+    .swaparoo-input-group {
       flex: 1;
+      min-width: 0;
+    }
+
+    .swaparoo-input-label {
+      display: block;
+      font-size: 11px;
+      font-weight: 500;
+      color: #6b7280;
+      margin-bottom: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .swaparoo-modal-inputs input {
+      width: 100%;
       padding: 10px 12px;
       border: 1px solid #d1d5db;
       border-radius: 6px;
       font-size: 14px;
       box-sizing: border-box;
-      min-width: 0;
       color: #1f2937;
-      background: white;
-    }
-
-    .swaparoo-modal-inputs input::placeholder {
-      color: #9ca3af;
+      background: #f9fafb;
+      cursor: default;
     }
 
     .swaparoo-modal-inputs input:focus {
       outline: none;
-      border-color: #6366f1;
     }
 
     .swaparoo-swap-btn {
@@ -468,9 +478,15 @@ function showAddWordModal(selectedWord: string, sentenceContext?: string | null,
     <div class="swaparoo-modal">
       <h3>Add to Swaparoo${pos ? ` <span class="swaparoo-pos">(${pos})</span>` : ''}</h3>
       <div class="swaparoo-modal-inputs">
-        <input type="text" class="swaparoo-input-en" placeholder="English" />
+        <div class="swaparoo-input-group">
+          <label class="swaparoo-input-label">English</label>
+          <input type="text" class="swaparoo-input-en" readonly />
+        </div>
         <button class="swaparoo-swap-btn" title="Swap">↔</button>
-        <input type="text" class="swaparoo-input-es" placeholder="Spanish" />
+        <div class="swaparoo-input-group">
+          <label class="swaparoo-input-label">Spanish</label>
+          <input type="text" class="swaparoo-input-es" readonly />
+        </div>
       </div>
       <div class="swaparoo-modal-buttons">
         <button class="swaparoo-modal-btn swaparoo-modal-btn-cancel">Cancel</button>
