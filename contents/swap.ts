@@ -266,14 +266,11 @@ function detectPartOfSpeech(word: string, sentence: string | null): string | nul
   const term = terms[0];
   const tags = term.tags || [];
 
-  // Map compromise tags to simple abbreviations
-  if (tags.includes('Noun')) return 'n';
-  if (tags.includes('Verb')) return 'v';
+  // Map compromise tags to dropdown values
+  if (tags.includes('Noun')) return 'noun';
+  if (tags.includes('Verb')) return 'verb';
   if (tags.includes('Adjective')) return 'adj';
   if (tags.includes('Adverb')) return 'adv';
-  if (tags.includes('Preposition')) return 'prep';
-  if (tags.includes('Conjunction')) return 'conj';
-  if (tags.includes('Pronoun')) return 'pron';
 
   return null;
 }
