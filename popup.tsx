@@ -270,10 +270,11 @@ function IndexPopup() {
       />
 
       <div style={styles.footer}>
-        {activeTab === 'learning'
-          ? `${state.words.length} word${state.words.length !== 1 ? 's' : ''} learning`
-          : `${(state.learnedWords || []).length} word${(state.learnedWords || []).length !== 1 ? 's' : ''} learned`
-        }
+        <span>{state.words.length} learning</span>
+        <span style={styles.footerDot}>·</span>
+        <span>{(state.learnedWords || []).length} learned</span>
+        <span style={styles.footerDot}>·</span>
+        <span>{state.words.length + (state.learnedWords || []).length} total</span>
       </div>
     </div>
   );
@@ -764,7 +765,13 @@ const styles: Record<string, React.CSSProperties> = {
   footer: {
     fontSize: 12,
     color: '#9ca3af',
-    textAlign: 'center'
+    textAlign: 'center',
+    display: 'flex',
+    justifyContent: 'center',
+    gap: 6
+  },
+  footerDot: {
+    color: '#d1d5db'
   }
 };
 
