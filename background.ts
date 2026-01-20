@@ -26,7 +26,15 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   }
 });
 
-chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.type === 'SWAPAROO_SHOW_ADD_MODAL') {
+    // Relay to CSUI modal in the same tab
+    if (sender.tab?.id) {
+      chrome.tabs.sendMessage(sender.tab.id, message);
+    }
+    return;
+  }
+
   if (message.type === 'SWAPAROO_TRANSLATE') {
     (async () => {
       const state = await getState();
