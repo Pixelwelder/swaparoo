@@ -42,6 +42,7 @@ export function AddWordModal({
   const [targetSentence, setTargetSentence] = useState('');
   const [pos, setPos] = useState(initialPos);
   const [translating, setTranslating] = useState(false);
+  const [translateError, setTranslateError] = useState<string | null>(null);
 
   function detectPartOfSpeech(word: string): string {
     const doc = nlp(word);
@@ -62,6 +63,7 @@ export function AddWordModal({
     if (!apiKey && !onTranslate) return;
 
     setTranslating(true);
+    setTranslateError(null);
 
     // Detect POS if not already set and source is English
     if (!pos && direction === 'en-to-es') {
@@ -85,6 +87,8 @@ export function AddWordModal({
       setTargetSentence(result.sentence || '');
     } catch (err) {
       console.error('Translation error:', err);
+      const message = err instanceof Error ? err.message : 'Translation failed. Check your API key in settings.';
+      setTranslateError(message);
     }
     setTranslating(false);
   }
@@ -149,8 +153,8 @@ export function AddWordModal({
       <div style={styles.modal} onClick={e => e.stopPropagation()}>
         <h3 style={styles.title}>{readOnlySource ? 'Add to Swaparoo' : 'Add New Word'}</h3>
 
-        {externalError && (
-          <div style={styles.error}>{externalError}</div>
+        {(externalError || translateError) && (
+          <div style={styles.error}>{externalError || translateError}</div>
         )}
 
         <div style={styles.directionRow}>

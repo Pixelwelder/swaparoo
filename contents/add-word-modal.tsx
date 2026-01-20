@@ -7,7 +7,7 @@ import { addWord, getState } from '../lib/storage';
 const SIMULATE_ERRORS = {
   getState: false,   // Error #1: Storage read failure
   addWord: false,    // Error #2: Storage write failure
-  translate: true    // Error #3: Translation message failure
+  translate: false   // Error #3: Translation message failure
 };
 
 export const config: PlasmoCSConfig = {
@@ -79,15 +79,21 @@ function AddWordModalOverlay() {
     sentence: string,
     direction: 'en-to-es' | 'es-to-en'
   ): Promise<TranslateResult> {
+    if (SIMULATE_ERRORS.translate) {
+      throw new Error('Simulated translation failure');
+    }
     const response = await chrome.runtime.sendMessage({
       type: 'SWAPAROO_TRANSLATE_WITH_SENTENCE',
       word,
       sentence,
       direction
     });
+    if (!response || (!response.word && !response.sentence)) {
+      throw new Error('Translation failed. Check your API key in settings.');
+    }
     return {
-      word: response?.word || null,
-      sentence: response?.sentence || null
+      word: response.word || null,
+      sentence: response.sentence || null
     };
   }
 

@@ -4,7 +4,7 @@
 
 - [x] 1. `getState()` - Storage read failure when loading API key
 - [x] 2. `addWord()` - Storage write failure when saving word
-- [ ] 3. `handleTranslate()` - Message to background not handled/no response
+- [x] 3. `handleTranslate()` - Message to background not handled/no response
 
 ## Background Script (`background.ts`)
 
