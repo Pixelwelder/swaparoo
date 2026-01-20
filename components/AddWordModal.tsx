@@ -95,7 +95,7 @@ export function AddWordModal({
 
   // Auto-translate when in readOnlySource mode (from page)
   useEffect(() => {
-    if (readOnlySource && initialWord && apiKey) {
+    if (readOnlySource && initialWord && (apiKey || onTranslate)) {
       runTranslation();
     }
   }, []);
@@ -124,7 +124,7 @@ export function AddWordModal({
 
   // Need to update runTranslation to use current direction
   useEffect(() => {
-    if (readOnlySource && sourceWord && apiKey && !translating && !targetWord) {
+    if (readOnlySource && sourceWord && (apiKey || onTranslate) && !translating && !targetWord) {
       runTranslation();
     }
   }, [direction]);

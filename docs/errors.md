@@ -13,8 +13,8 @@
 
 ## AddWordModal Component (`components/AddWordModal.tsx`)
 
-- [ ] 6. `runTranslation()` - Translation error (already has try/catch but no UI feedback)
+- [x] 6. `runTranslation()` - Translation error (already has try/catch but no UI feedback) - Fixed in #3
 
 ## Auto-translate Bug (separate from error handling)
 
-- [ ] 7. useEffect checks `apiKey` but should also check `onTranslate`
+- [x] 7. useEffect checks `apiKey` but should also check `onTranslate`
