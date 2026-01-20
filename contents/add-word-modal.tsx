@@ -88,6 +88,9 @@ function AddWordModalOverlay() {
       sentence,
       direction
     });
+    if (response?.error) {
+      throw new Error(response.error);
+    }
     if (!response || (!response.word && !response.sentence)) {
       throw new Error('Translation failed. Check your API key in settings.');
     }

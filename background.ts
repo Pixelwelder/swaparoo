@@ -1,5 +1,10 @@
 import { getState, translateWord, translateWithSentence } from './lib/storage';
 
+// Toggle to simulate errors for testing (set to false for production)
+const SIMULATE_ERRORS = {
+  translateApi: false  // Error #4: DeepL API failure
+};
+
 export {};
 
 chrome.runtime.onInstalled.addListener(() => {
@@ -55,18 +60,26 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   if (message.type === 'SWAPAROO_TRANSLATE_WITH_SENTENCE') {
     (async () => {
-      const state = await getState();
-      if (!state.deeplApiKey) {
-        sendResponse({ word: null, sentence: null });
-        return;
+      try {
+        const state = await getState();
+        if (!state.deeplApiKey) {
+          sendResponse({ word: null, sentence: null, error: 'No API key configured. Add your DeepL API key in settings.' });
+          return;
+        }
+        if (SIMULATE_ERRORS.translateApi) {
+          throw new Error('Simulated API failure');
+        }
+        const result = await translateWithSentence(
+          message.word,
+          message.sentence,
+          state.deeplApiKey,
+          message.direction
+        );
+        sendResponse(result);
+      } catch (err) {
+        console.error('Translation API error:', err);
+        sendResponse({ word: null, sentence: null, error: 'Translation failed. Check your internet connection and API key.' });
       }
-      const result = await translateWithSentence(
-        message.word,
-        message.sentence,
-        state.deeplApiKey,
-        message.direction
-      );
-      sendResponse(result);
     })();
     return true;
   }

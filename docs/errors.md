@@ -8,7 +8,7 @@
 
 ## Background Script (`background.ts`)
 
-- [ ] 4. `translateWithSentence()` - DeepL API failure (network, auth, rate limit)
+- [x] 4. `translateWithSentence()` - DeepL API failure (network, auth, rate limit)
 - [ ] 5. Message relay - No sender.tab (modal never opens)
 
 ## AddWordModal Component (`components/AddWordModal.tsx`)
