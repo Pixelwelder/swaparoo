@@ -5,9 +5,9 @@ import { addWord, getState } from '../lib/storage';
 
 // Toggle to simulate errors for testing (set to false for production)
 const SIMULATE_ERRORS = {
-  getState: false,  // Error #1: Storage read failure
-  addWord: true,    // Error #2: Storage write failure
-  translate: false  // Error #3: Translation message failure
+  getState: false,   // Error #1: Storage read failure
+  addWord: false,    // Error #2: Storage write failure
+  translate: true    // Error #3: Translation message failure
 };
 
 export const config: PlasmoCSConfig = {
@@ -37,7 +37,8 @@ function AddWordModalOverlay() {
   const [visible, setVisible] = useState(false);
   const [modalData, setModalData] = useState<ModalData | null>(null);
   const [apiKey, setApiKey] = useState<string | undefined>();
-  const [error, setError] = useState<string | null>(null);
+  const [fatalError, setFatalError] = useState<string | null>(null);
+  const [addError, setAddError] = useState<string | null>(null);
 
   useEffect(() => {
     // Load API key
@@ -50,7 +51,7 @@ function AddWordModalOverlay() {
         setApiKey(state.deeplApiKey);
       } catch (err) {
         console.error('Failed to load settings:', err);
-        setError('Failed to load settings. Try reloading the page.');
+        setFatalError('Failed to load settings. Try reloading the page.');
       }
     })();
 
@@ -91,17 +92,26 @@ function AddWordModalOverlay() {
   }
 
   async function handleAdd(en: string, es: string, pos?: string, sentenceEn?: string, sentenceEs?: string) {
-    await addWord(en, es, pos, sentenceEn, sentenceEs);
+    setAddError(null);
+    try {
+      if (SIMULATE_ERRORS.addWord) {
+        throw new Error('Simulated storage write failure');
+      }
+      await addWord(en, es, pos, sentenceEn, sentenceEs);
 
-    // Notify the swap content script to update
-    window.postMessage({
-      type: 'SWAPAROO_WORD_ADDED',
-      word: en,
-      translation: es
-    }, '*');
+      // Notify the swap content script to update
+      window.postMessage({
+        type: 'SWAPAROO_WORD_ADDED',
+        word: en,
+        translation: es
+      }, '*');
 
-    setVisible(false);
-    setModalData(null);
+      setVisible(false);
+      setModalData(null);
+    } catch (err) {
+      console.error('Failed to save word:', err);
+      setAddError('Failed to save word. Try again or reload the page.');
+    }
   }
 
   function handleClose() {
@@ -114,12 +124,12 @@ function AddWordModalOverlay() {
   }
 
   // Show simplified error view if settings failed to load
-  if (error) {
+  if (fatalError) {
     return (
       <div style={errorOverlayStyles.overlay} onClick={handleClose}>
         <div style={errorOverlayStyles.modal} onClick={e => e.stopPropagation()}>
           <h3 style={errorOverlayStyles.title}>Add to Swaparoo</h3>
-          <div style={errorOverlayStyles.error}>{error}</div>
+          <div style={errorOverlayStyles.error}>{fatalError}</div>
           <div style={errorOverlayStyles.buttons}>
             <button onClick={handleClose} style={errorOverlayStyles.cancelBtn}>
               Close
@@ -141,6 +151,7 @@ function AddWordModalOverlay() {
       initialDirection={modalData.direction}
       initialPos={modalData.pos}
       readOnlySource={true}
+      error={addError}
     />
   );
 }
