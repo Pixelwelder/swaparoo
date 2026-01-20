@@ -34,9 +34,20 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'SWAPAROO_SHOW_ADD_MODAL') {
     // Relay to CSUI modal in the same tab
-    if (sender.tab?.id) {
-      chrome.tabs.sendMessage(sender.tab.id, message);
-    }
+    (async () => {
+      let tabId = sender.tab?.id;
+      if (!tabId) {
+        // Fallback: try to find the active tab
+        console.warn('SWAPAROO_SHOW_ADD_MODAL: No sender.tab, falling back to active tab');
+        const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        tabId = activeTab?.id;
+      }
+      if (tabId) {
+        chrome.tabs.sendMessage(tabId, message);
+      } else {
+        console.error('SWAPAROO_SHOW_ADD_MODAL: Could not find tab to send modal message');
+      }
+    })();
     return;
   }
 

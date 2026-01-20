@@ -9,7 +9,7 @@
 ## Background Script (`background.ts`)
 
 - [x] 4. `translateWithSentence()` - DeepL API failure (network, auth, rate limit)
-- [ ] 5. Message relay - No sender.tab (modal never opens)
+- [x] 5. Message relay - No sender.tab (modal never opens) - Added fallback to active tab
 
 ## AddWordModal Component (`components/AddWordModal.tsx`)
 
