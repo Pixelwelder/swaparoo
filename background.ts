@@ -1,10 +1,5 @@
 import { getState, translateWord, translateWithSentence } from './lib/storage';
 
-// Toggle to simulate errors for testing (set to false for production)
-const SIMULATE_ERRORS = {
-  translateApi: false  // Error #4: DeepL API failure
-};
-
 export {};
 
 chrome.runtime.onInstalled.addListener(() => {
@@ -76,9 +71,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         if (!state.deeplApiKey) {
           sendResponse({ word: null, sentence: null, error: 'No API key configured. Add your DeepL API key in settings.' });
           return;
-        }
-        if (SIMULATE_ERRORS.translateApi) {
-          throw new Error('Simulated API failure');
         }
         const result = await translateWithSentence(
           message.word,
