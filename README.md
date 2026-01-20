@@ -12,6 +12,8 @@ A Chrome extension for learning Spanish by replacing English words with their Sp
 - **Sentence Context**: Store example sentences for each word
 - **Domain Blocking**: Disable Swaparoo on specific websites
 - **Sortable Word List**: Sort by English, Spanish, or date added
+- **Search**: Filter your word list by English or Spanish
+- **Keyboard Shortcut**: Press `Alt+S` to quickly add selected words
 
 ## Installation
 
@@ -53,6 +55,7 @@ The production build will be in `build/chrome-mv3-prod`.
 
 2. **Add Words**:
    - Right-click any word on a webpage and select "Add to Swaparoo"
+   - Or press `Alt+S` (keyboard shortcut) while a word is selected
    - Or click the extension icon and use the "+ New Word" button
 
 3. **Browse**: Words you've added will be replaced with their Spanish translations on all pages

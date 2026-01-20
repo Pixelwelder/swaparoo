@@ -29,7 +29,17 @@
     "permissions": [
       "storage",
       "contextMenus",
-      "tabs"
-    ]
+      "tabs",
+      "scripting"
+    ],
+    "commands": {
+      "add-selected-word": {
+        "suggested_key": {
+          "default": "Alt+S",
+          "mac": "Alt+S"
+        },
+        "description": "Add selected word to Swaparoo"
+      }
+    }
   }
 }

@@ -10,6 +10,32 @@ chrome.runtime.onInstalled.addListener(() => {
   });
 });
 
+// Handle keyboard shortcut
+chrome.commands.onCommand.addListener(async (command) => {
+  if (command === 'add-selected-word') {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tab?.id) return;
+
+    try {
+      // Get selected text from the page
+      const results = await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        func: () => window.getSelection()?.toString().trim() || ''
+      });
+
+      const selectedText = results?.[0]?.result;
+      if (selectedText && !selectedText.includes(' ')) {
+        await chrome.tabs.sendMessage(tab.id, {
+          type: 'SWAPAROO_ADD_WORD',
+          word: selectedText
+        });
+      }
+    } catch {
+      // Content script not loaded or scripting failed
+    }
+  }
+});
+
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   if (info.menuItemId === 'swaparoo-add' && info.selectionText && tab?.id) {
     const word = info.selectionText.trim();
