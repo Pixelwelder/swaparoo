@@ -26,6 +26,7 @@ function IndexPopup() {
   const [apiKeyInput, setApiKeyInput] = useState('');
   const [newBlockedDomain, setNewBlockedDomain] = useState('');
   const [activeTab, setActiveTab] = useState<Tab>('learning');
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     loadState();
@@ -259,6 +260,24 @@ function IndexPopup() {
         />
       )}
 
+      <div style={styles.searchContainer}>
+        <input
+          type="text"
+          placeholder="Search words..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          style={styles.searchInput}
+        />
+        {searchQuery && (
+          <button
+            onClick={() => setSearchQuery('')}
+            style={styles.searchClear}
+          >
+            ×
+          </button>
+        )}
+      </div>
+
       <WordList
         words={activeTab === 'learning' ? state.words : (state.learnedWords || [])}
         sortBy={state.sortBy}
@@ -267,6 +286,7 @@ function IndexPopup() {
         onAction={activeTab === 'learning' ? handleMarkLearned : handleMoveToLearning}
         actionIcon={activeTab === 'learning' ? '✓' : '←'}
         actionTitle={activeTab === 'learning' ? 'Mark as learned' : 'Move to learning'}
+        searchQuery={searchQuery}
       />
 
       <div style={styles.footer}>
@@ -288,9 +308,10 @@ interface WordListProps {
   onAction: (en: string) => void;
   actionIcon: string;
   actionTitle: string;
+  searchQuery?: string;
 }
 
-function WordList({ words, sortBy, onSortChange, onRemove, onAction, actionIcon, actionTitle }: WordListProps) {
+function WordList({ words, sortBy, onSortChange, onRemove, onAction, actionIcon, actionTitle, searchQuery = '' }: WordListProps) {
   const [expandedWord, setExpandedWord] = useState<string | null>(null);
 
   function toggleExpand(en: string) {
@@ -325,7 +346,14 @@ function WordList({ words, sortBy, onSortChange, onRemove, onAction, actionIcon,
   }
 
   const sortedWords = useMemo(() => {
-    const wordsCopy = [...words];
+    // Filter by search query
+    const query = searchQuery.toLowerCase();
+    const filtered = query
+      ? words.filter(w => w.en.toLowerCase().includes(query) || w.es.toLowerCase().includes(query))
+      : words;
+
+    // Sort
+    const wordsCopy = [...filtered];
     const currentSort = sortBy || 'added-desc';
     const [column, direction] = currentSort.split('-');
     const mult = direction === 'asc' ? 1 : -1;
@@ -340,10 +368,14 @@ function WordList({ words, sortBy, onSortChange, onRemove, onAction, actionIcon,
       default:
         return wordsCopy;
     }
-  }, [words, sortBy]);
+  }, [words, sortBy, searchQuery]);
 
   if (words.length === 0) {
     return <div style={styles.empty}>No words yet.</div>;
+  }
+
+  if (sortedWords.length === 0 && searchQuery) {
+    return <div style={styles.empty}>No matches for "{searchQuery}"</div>;
   }
 
   return (
@@ -772,6 +804,32 @@ const styles: Record<string, React.CSSProperties> = {
   },
   footerDot: {
     color: '#d1d5db'
+  },
+  searchContainer: {
+    position: 'relative' as const,
+    marginBottom: 12
+  },
+  searchInput: {
+    width: '100%',
+    padding: '8px 32px 8px 10px',
+    border: '1px solid #e5e7eb',
+    borderRadius: 6,
+    fontSize: 13,
+    outline: 'none',
+    boxSizing: 'border-box' as const
+  },
+  searchClear: {
+    position: 'absolute' as const,
+    right: 8,
+    top: '50%',
+    transform: 'translateY(-50%)',
+    background: 'transparent',
+    border: 'none',
+    color: '#9ca3af',
+    fontSize: 16,
+    cursor: 'pointer',
+    padding: 0,
+    lineHeight: 1
   }
 };
 
