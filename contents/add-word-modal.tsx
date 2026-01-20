@@ -3,13 +3,6 @@ import { useState, useEffect } from 'react';
 import { AddWordModal, TranslateResult } from '../components/AddWordModal';
 import { addWord, getState } from '../lib/storage';
 
-// Toggle to simulate errors for testing (set to false for production)
-const SIMULATE_ERRORS = {
-  getState: false,   // Error #1: Storage read failure
-  addWord: false,    // Error #2: Storage write failure
-  translate: false   // Error #3: Translation message failure
-};
-
 export const config: PlasmoCSConfig = {
   matches: ['<all_urls>'],
   run_at: 'document_idle'
@@ -39,14 +32,12 @@ function AddWordModalOverlay() {
   const [apiKey, setApiKey] = useState<string | undefined>();
   const [fatalError, setFatalError] = useState<string | null>(null);
   const [addError, setAddError] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ en: string; es: string } | null>(null);
 
   useEffect(() => {
     // Load API key
     (async () => {
       try {
-        if (SIMULATE_ERRORS.getState) {
-          throw new Error('Simulated storage read failure');
-        }
         const state = await getState();
         setApiKey(state.deeplApiKey);
       } catch (err) {
@@ -79,9 +70,6 @@ function AddWordModalOverlay() {
     sentence: string,
     direction: 'en-to-es' | 'es-to-en'
   ): Promise<TranslateResult> {
-    if (SIMULATE_ERRORS.translate) {
-      throw new Error('Simulated translation failure');
-    }
     const response = await chrome.runtime.sendMessage({
       type: 'SWAPAROO_TRANSLATE_WITH_SENTENCE',
       word,
@@ -103,9 +91,6 @@ function AddWordModalOverlay() {
   async function handleAdd(en: string, es: string, pos?: string, sentenceEn?: string, sentenceEs?: string) {
     setAddError(null);
     try {
-      if (SIMULATE_ERRORS.addWord) {
-        throw new Error('Simulated storage write failure');
-      }
       await addWord(en, es, pos, sentenceEn, sentenceEs);
 
       // Notify the swap content script to update
@@ -117,6 +102,10 @@ function AddWordModalOverlay() {
 
       setVisible(false);
       setModalData(null);
+
+      // Show success toast
+      setToast({ en, es });
+      setTimeout(() => setToast(null), 3000);
     } catch (err) {
       console.error('Failed to save word:', err);
       setAddError('Failed to save word. Try again or reload the page.');
@@ -128,7 +117,15 @@ function AddWordModalOverlay() {
     setModalData(null);
   }
 
+  // Show toast even when modal is closed
   if (!visible || !modalData) {
+    if (toast) {
+      return (
+        <div style={toastStyles.toast}>
+          Added: {toast.en} → {toast.es}
+        </div>
+      );
+    }
     return null;
   }
 
@@ -214,6 +211,22 @@ const errorOverlayStyles: Record<string, React.CSSProperties> = {
     fontSize: 13,
     fontWeight: 500,
     cursor: 'pointer'
+  }
+};
+
+const toastStyles: Record<string, React.CSSProperties> = {
+  toast: {
+    position: 'fixed',
+    bottom: 24,
+    right: 24,
+    background: '#1f2937',
+    color: 'white',
+    padding: '12px 20px',
+    borderRadius: 8,
+    fontSize: 14,
+    fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)',
+    zIndex: 9999999
   }
 };
 
